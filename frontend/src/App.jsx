@@ -1,78 +1,71 @@
 
-import { useEffect, useState } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  GeoJSON,
-} from "react-leaflet";
+import L from 'leaflet'
+import { useEffect, useState } from 'react'
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import './App.css'
 
-import "leaflet/dist/leaflet.css";
-import "./App.css";
-
-function App() {
-  const [districts, setDistricts] = useState(null);
-  const [error, setError] = useState("");
+function FitMapToDistricts({ data }) {
+  const map = useMap()
 
   useEffect(() => {
-    fetch("/MP_DISTRICTS.geojson")
+    if (data) {
+      const layer = L.geoJSON(data)
+      const bounds = layer.getBounds()
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [20, 20] })
+      }
+    }
+  }, [data, map])
+
+  return null
+}
+
+function App() {
+  const [districts, setDistricts] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetch('/districts.geojson')
       .then((response) => {
         if (!response.ok) {
-          throw new Error("Could not load the GeoJSON file");
+          throw new Error('Could not load districts.geojson')
         }
-        return response.json();
+        return response.json()
       })
-      .then((data) => setDistricts(data))
-      .catch((err) => setError(err.message));
-  }, []);
+      .then(setDistricts)
+      .catch((err) => setError(err.message))
+  }, [])
 
-  const districtStyle = {
-    color: "#174EA6",
-    weight: 2,
-    fillColor: "#72B7E8",
-    fillOpacity: 0.15,
-  };
+  if (error) return <p>{error}</p>
+  if (!districts) return <p>Loading Madhya Pradesh districts...</p>
 
   return (
-    <div className="app">
-      <h1>Madhya Pradesh Geospatial Data System</h1>
-      <p>State and district boundary map</p>
-
-      {error && <p className="error">{error}</p>}
-
+    <div style={{ height: '100vh', width: '100%' }}>
       <MapContainer
         center={[23.5, 78.5]}
         zoom={6}
-        scrollWheelZoom={true}
-        className="map"
+        style={{ height: '100%', width: '100%' }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
-        {districts && (
-          <GeoJSON
-            data={districts}
-            style={districtStyle}
-            onEachFeature={(feature, layer) => {
-              const props = feature.properties || {};
-
-              const name =
-                props.district ||
-                props.DISTRICT ||
-                props.Dist_Name ||
-                props.NAME_2 ||
-                props.name ||
-                "District";
-
-              layer.bindPopup(name);
-              layer.bindTooltip(name);
-            }}
-          />
-        )}
+        <GeoJSON
+          data={districts}
+          style={{
+            color: '#1769aa',
+            weight: 2,
+            fillColor: '#64b5f6',
+            fillOpacity: 0.2,
+          }}
+        />
+        <FitMapToDistricts data={districts} />
       </MapContainer>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
+
