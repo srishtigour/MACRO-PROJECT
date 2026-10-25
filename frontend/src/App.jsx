@@ -35,7 +35,7 @@ function App() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/districts.geojson')
+    fetch('http://localhost:5000/api/districts')
       .then((response) => {
         if (!response.ok) {
           throw new Error('Could not load districts.geojson')
