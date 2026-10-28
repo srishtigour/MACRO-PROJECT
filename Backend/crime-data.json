@@ -1,0 +1,190 @@
+{
+  "year": 2024,
+  "metric": "Total reported crimes against women (IPC/BNS + SLL)",
+  "boundaryFeatureCount": 52,
+  "reportedStateTotal": 32832,
+  "mappedTotal": 32718,
+  "excludedTotal": 114,
+  "excludedJurisdictions": [
+    {
+      "name": "Bhopal Railway",
+      "total": 21
+    },
+    {
+      "name": "Indore Railway",
+      "total": 12
+    },
+    {
+      "name": "Jabalpur Railway",
+      "total": 27
+    },
+    {
+      "name": "Cyber Crime Cell",
+      "total": 54
+    }
+  ],
+  "mappingNotes": [
+    "Pandhurna is grouped into Chhindwara, Maihar into Satna, and Mauganj into Rewa to match the available district boundary polygons.",
+    "Bhopal Commissionarate and Bhopal Rural are grouped into Bhopal; Indore Commissionarate and Indore Rural are grouped into Indore.",
+    "Railway and Cyber Crime Cell rows are excluded because they do not map to one district polygon.",
+    "District counts are raw reported totals, not population-adjusted rates."
+  ],
+  "districts": {
+    "Agar Malwa": {
+      "total": 131
+    },
+    "Alirajpur": {
+      "total": 229
+    },
+    "Anuppur": {
+      "total": 381
+    },
+    "Ashoknagar": {
+      "total": 394
+    },
+    "Balaghat": {
+      "total": 478
+    },
+    "Barwani": {
+      "total": 385
+    },
+    "Betul": {
+      "total": 645
+    },
+    "Bhind": {
+      "total": 399
+    },
+    "Bhopal": {
+      "total": 1955
+    },
+    "Burhanpur": {
+      "total": 222
+    },
+    "Chhatarpur": {
+      "total": 789
+    },
+    "Chhindwara": {
+      "total": 688
+    },
+    "Damoh": {
+      "total": 366
+    },
+    "Datia": {
+      "total": 312
+    },
+    "Dewas": {
+      "total": 754
+    },
+    "Dhar": {
+      "total": 915
+    },
+    "Dindori": {
+      "total": 442
+    },
+    "Guna": {
+      "total": 443
+    },
+    "Gwalior": {
+      "total": 1213
+    },
+    "Harda": {
+      "total": 273
+    },
+    "Hoshangabad": {
+      "total": 589
+    },
+    "Indore": {
+      "total": 2446
+    },
+    "Jabalpur": {
+      "total": 1154
+    },
+    "Jhabua": {
+      "total": 420
+    },
+    "Katni": {
+      "total": 405
+    },
+    "Khandwa": {
+      "total": 499
+    },
+    "Khargone": {
+      "total": 731
+    },
+    "Mandla": {
+      "total": 423
+    },
+    "Mandsaur": {
+      "total": 359
+    },
+    "Morena": {
+      "total": 430
+    },
+    "Narsimhapur": {
+      "total": 564
+    },
+    "Neemuch": {
+      "total": 297
+    },
+    "Niwari": {
+      "total": 191
+    },
+    "Panna": {
+      "total": 493
+    },
+    "Raisen": {
+      "total": 629
+    },
+    "Rajgarh": {
+      "total": 787
+    },
+    "Ratlam": {
+      "total": 924
+    },
+    "Rewa": {
+      "total": 1084
+    },
+    "Sagar": {
+      "total": 1379
+    },
+    "Satna": {
+      "total": 813
+    },
+    "Sehore": {
+      "total": 633
+    },
+    "Seoni": {
+      "total": 565
+    },
+    "Shahdol": {
+      "total": 676
+    },
+    "Shajapur": {
+      "total": 543
+    },
+    "Sheopur": {
+      "total": 171
+    },
+    "Shivpuri": {
+      "total": 637
+    },
+    "Sidhi": {
+      "total": 391
+    },
+    "Singrauli": {
+      "total": 717
+    },
+    "Tikamgarh": {
+      "total": 345
+    },
+    "Ujjain": {
+      "total": 880
+    },
+    "Umaria": {
+      "total": 277
+    },
+    "Vidisha": {
+      "total": 852
+    }
+  }
+}

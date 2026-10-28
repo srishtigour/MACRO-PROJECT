@@ -40,3 +40,86 @@
   outline: 3px solid #f59e0b;
   outline-offset: 2px;
 }
+
+.layer-panel {
+  position:absolute; top:96px; left:16px; z-index:1000; display:flex;
+  flex-direction:column; gap:10px; width:250px; max-height:calc(100vh - 32px);
+  overflow-y:auto; box-sizing:border-box; border-radius:9px; padding:14px;
+  background:rgb(255 255 255 / 97%); box-shadow:0 2px 12px rgb(0 0 0 / 24%);
+  color:#1f2937; font:13px/1.4 system-ui,sans-serif;
+}
+.layer-panel h2 { margin:0; color:#1f2937; font-size:17px; }
+.layer-option { display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-weight:600; }
+.layer-option input { width:16px; height:16px; margin:1px 0 0; accent-color:#1769aa; }
+.layer-option input:disabled { cursor:wait; }
+.layer-status { color:#4b5563; font-size:12px; }
+
+.crime-load-error {
+  max-width: 260px;
+  border-radius: 5px;
+  padding: 5px 8px;
+  background: #fff;
+  color: #991b1b;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+  font-size: 12px;
+}
+
+.crime-legend {
+  width: 100%;
+  box-sizing: border-box;
+  border-top: 1px solid #d1d5db;
+  padding-top: 10px;
+  color: #1f2937;
+  text-align: left;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+.crime-legend strong,
+.crime-legend-subtitle {
+  display: block;
+}
+
+.crime-legend strong {
+  font-size: 14px;
+}
+
+.crime-legend-subtitle {
+  margin-top: 2px;
+  color: #4b5563;
+}
+
+.crime-legend-items {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px 10px;
+  margin-top: 10px;
+}
+
+.crime-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.crime-legend-swatch {
+  display: inline-block;
+  width: 15px;
+  height: 12px;
+  flex: 0 0 15px;
+  border: 1px solid rgb(31 41 55 / 30%);
+  border-radius: 2px;
+}
+
+.crime-legend p {
+  margin: 10px 0 0;
+  color: #4b5563;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .layer-panel { top:90px; left:10px; width:min(250px, calc(100vw - 20px)); max-height:calc(100vh - 20px); }
+  .district-selection { top:10px; left:auto; right:10px; max-width:max(120px, calc(100vw - 280px)); gap:6px; transform:none; }
+}

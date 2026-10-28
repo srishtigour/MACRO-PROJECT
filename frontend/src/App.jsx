@@ -1,8 +1,10 @@
 import L from 'leaflet'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { GeoJSON, MapContainer, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
+
+const CRIME_CLASSES = [{label:'Low',color:'#2e9d50'},{label:'Medium',color:'#f28c28'},{label:'High',color:'#d62828'}]
 
 function isValidDistrictFeature(feature) {
   if (!['Polygon', 'MultiPolygon'].includes(feature?.geometry?.type)) return false
@@ -12,6 +14,26 @@ function isValidDistrictFeature(feature) {
   } catch {
     return false
   }
+}
+
+function getQuantileBreaks(values) {
+  if (values.length === 0) return []
+
+  const sortedValues = [...values].sort((first, second) => first - second)
+  return [1 / 3, 2 / 3].map((quantile) =>
+    sortedValues[Math.ceil(quantile * sortedValues.length) - 1],
+  )
+}
+
+function getCrimeColor(value, breaks) {
+  if (!Number.isFinite(value) || breaks.length === 0) return '#cbd5e1'
+
+  const colorIndex = breaks.findIndex((limit) => value <= limit)
+  return CRIME_CLASSES[colorIndex === -1 ? CRIME_CLASSES.length - 1 : colorIndex].color
+}
+
+function formatCount(value) {
+  return new Intl.NumberFormat('en-IN').format(value)
 }
 
 function FitMapToDistricts({ data }) {
@@ -31,8 +53,11 @@ function FitMapToDistricts({ data }) {
 
 function App() {
   const [districts, setDistricts] = useState(null)
+  const [crimeData, setCrimeData] = useState(null)
   const [selectedDistrict, setSelectedDistrict] = useState(null)
+  const [showCrimeLayer, setShowCrimeLayer] = useState(false)
   const [error, setError] = useState('')
+  const [crimeError, setCrimeError] = useState('')
 
   useEffect(() => {
     fetch('http://localhost:5000/api/districts')
@@ -55,21 +80,82 @@ function App() {
         setDistricts({ ...data, features })
       })
       .catch((err) => setError(err.message))
+
+    fetch('http://localhost:5000/api/crime')
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Could not load the 2024 crime data')
+        }
+        return response.json()
+      })
+      .then((data) => {
+        if (!data?.districts || data.year !== 2024) {
+          throw new Error('The crime data is missing district totals')
+        }
+        setCrimeData(data)
+      })
+      .catch((err) => setCrimeError(err.message))
   }, [])
 
-  if (error) return <p>{error}</p>
-  if (!districts) return <p>Loading Madhya Pradesh districts...</p>
+  const visibleDistricts = useMemo(() => {
+    if (!districts) return null
+    return selectedDistrict
+      ? { ...districts, features: [selectedDistrict] }
+      : districts
+  }, [districts, selectedDistrict])
 
-  const visibleDistricts = selectedDistrict
-    ? { ...districts, features: [selectedDistrict] }
-    : districts
+  const crimeBreaks = useMemo(() => {
+    if (!crimeData) return []
+    return getQuantileBreaks(
+      Object.values(crimeData.districts).map((district) => district.total),
+    )
+  }, [crimeData])
+  const crimeLegendLabels = crimeBreaks.length === 2
+    ? [
+        '≤ ' + formatCount(crimeBreaks[0]),
+        formatCount(crimeBreaks[0] + 1) + '–' + formatCount(crimeBreaks[1]),
+        '> ' + formatCount(crimeBreaks[1]),
+      ]
+    : []
+
+  if (error) return <p>{error}</p>
+  if (!districts || !visibleDistricts) return <p>Loading Madhya Pradesh districts...</p>
 
   const selectDistrict = (feature) => {
     if (isValidDistrictFeature(feature)) setSelectedDistrict(feature)
   }
 
+
+
   return (
     <div className="map-page">
+      <aside className="layer-panel" aria-label="Map layers">
+        <h2>Map Layers</h2>
+        <label className="layer-option">
+          <input type="checkbox" checked={showCrimeLayer} disabled={!crimeData}
+            onChange={(event) => setShowCrimeLayer(event.target.checked)} />
+          <span>Crimes against women · 2024</span>
+        </label>
+        {!crimeData && !crimeError && <span className="layer-status">Loading crime data…</span>}
+        {crimeError && <span className="crime-load-error">{crimeError}</span>}
+        {showCrimeLayer && crimeData && (
+          <div className="crime-legend" aria-label="2024 crime map legend">
+            <strong>Reported cases by district</strong>
+            <span className="crime-legend-subtitle">Relative totals across MP districts</span>
+            <div className="crime-legend-items">
+              {CRIME_CLASSES.map((crimeClass, index) => (
+                <div className="crime-legend-item" key={crimeClass.label}>
+                  <span className="crime-legend-swatch" style={{ backgroundColor: crimeClass.color }} />
+                  <span>{crimeClass.label}: {crimeLegendLabels[index]}</span>
+                </div>
+              ))}
+            </div>
+            <p>Pandhurna, Maihar, and Mauganj are grouped with their former district areas.
+              Railway and cyber-unit reports ({formatCount(crimeData.excludedTotal)}) are not shown because they do not map to one district boundary.</p>
+          </div>
+        )}
+      </aside>
+
       {selectedDistrict && (
         <div className="district-selection" role="region" aria-label="Selected district">
           <span>{selectedDistrict.properties?.dtname || 'Selected district'}</span>
@@ -78,6 +164,7 @@ function App() {
           </button>
         </div>
       )}
+
       <MapContainer
         center={[23.5, 78.5]}
         zoom={6}
@@ -88,10 +175,23 @@ function App() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <GeoJSON
-          key={selectedDistrict?.properties?.dtname || 'all-districts'}
+          key={`${selectedDistrict?.properties?.dtname || 'all-districts'}-${showCrimeLayer ? 'crime' : 'plain'}`}
           data={visibleDistricts}
-          style={(feature) =>
-            feature === selectedDistrict
+          style={(feature) => {
+            const isSelected = feature === selectedDistrict
+            const districtName = feature.properties?.dtname
+            const count = crimeData?.districts?.[districtName]?.total
+
+            if (showCrimeLayer) {
+              return {
+                color: isSelected ? '#1f2937' : '#ffffff',
+                weight: isSelected ? 3 : 1,
+                fillColor: getCrimeColor(count, crimeBreaks),
+                fillOpacity: 0.78,
+              }
+            }
+
+            return isSelected
               ? {
                   color: '#b45309',
                   weight: 3,
@@ -104,8 +204,15 @@ function App() {
                   fillColor: '#64b5f6',
                   fillOpacity: 0.2,
                 }
-          }
+          }}
           onEachFeature={(feature, layer) => {
+            const districtName = feature.properties?.dtname || 'District'
+            const count = crimeData?.districts?.[districtName]?.total
+            const tooltip = Number.isFinite(count)
+              ? `${districtName}: ${formatCount(count)} reported crimes against women in 2024`
+              : districtName
+
+            layer.bindTooltip(tooltip, { sticky: true })
             if (!selectedDistrict) {
               layer.on({ click: () => selectDistrict(feature) })
             }
