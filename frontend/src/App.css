@@ -49,6 +49,10 @@
   color:#1f2937; font:13px/1.4 system-ui,sans-serif;
 }
 .layer-panel h2 { margin:0; color:#1f2937; font-size:17px; }
+.layer-selector { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:4px; border-radius:7px; background:#e5e7eb; }
+.layer-selector button { border:0; border-radius:5px; padding:7px 4px; background:transparent; color:#374151; cursor:pointer; font:600 12px/1.2 system-ui,sans-serif; }
+.layer-selector button[aria-pressed="true"] { background:#1769aa; color:#fff; box-shadow:0 1px 3px rgb(0 0 0 / 18%); }
+.layer-selector button:focus-visible { outline:3px solid #f59e0b; outline-offset:2px; }
 .layer-option { display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-weight:600; }
 .layer-option input { width:16px; height:16px; margin:1px 0 0; accent-color:#1769aa; }
 .layer-option input:disabled { cursor:wait; }
@@ -197,6 +201,7 @@
   font-size: 11px;
   line-height: 1.4;
 }
+.crime-legend a { color:#1769aa; }
 
 @media (max-width: 600px) {
   .layer-panel { top:90px; left:10px; width:min(250px, calc(100vw - 20px)); max-height:calc(100vh - 20px); }

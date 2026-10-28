@@ -6,6 +6,51 @@ const path = require('node:path')
 const app = express()
 const port = 5000
 
+function parseCsv(text) {
+  const rows = []
+  let row = []
+  let value = ''
+  let insideQuotes = false
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index]
+
+    if (character === '"') {
+      if (insideQuotes && text[index + 1] === '"') {
+        value += '"'
+        index += 1
+      } else {
+        insideQuotes = !insideQuotes
+      }
+    } else if (character === ',' && !insideQuotes) {
+      row.push(value)
+      value = ''
+    } else if ((character === '\n' || character === '\r') && !insideQuotes) {
+      if (character === '\r' && text[index + 1] === '\n') index += 1
+      row.push(value)
+      if (row.some((cell) => cell !== '')) rows.push(row)
+      row = []
+      value = ''
+    } else {
+      value += character
+    }
+  }
+
+  if (value !== '' || row.length > 0) {
+    row.push(value)
+    rows.push(row)
+  }
+
+  const [headers, ...records] = rows
+  if (!headers || records.some((record) => record.length !== headers.length)) {
+    throw new Error('Population CSV has an invalid row or header')
+  }
+
+  return records.map((record) =>
+    Object.fromEntries(headers.map((header, index) => [header, record[index]])),
+  )
+}
+
 app.use(cors())
 
 app.get('/api/districts', async (req, res) => {
@@ -32,6 +77,23 @@ app.get('/api/crime', async (req, res) => {
     res.status(500).json({ error: 'Could not load crime data' })
   }
 })
+
+app.get('/api/population', async (req, res) => {
+  try {
+    const filePath = path.resolve(
+      __dirname,
+      '../data/raw/mp_district_population_estimates_2026.csv'
+    )
+    const csv = await fs.readFile(filePath, 'utf8')
+    const records = parseCsv(csv)
+
+    res.json({ records })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Population estimates could not be loaded' })
+  }
+})
+
 app.listen(port, () => {
   console.log(`Backend running at http://localhost:${port}`)
 })
