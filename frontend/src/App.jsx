@@ -117,6 +117,14 @@ function App() {
         '> ' + formatCount(crimeBreaks[1]),
       ]
     : []
+  const selectedDistrictName = selectedDistrict?.properties?.dtname || 'Selected district'
+  const selectedCrime = crimeData?.districts?.[selectedDistrictName]
+  const selectedCrimeTypes = selectedCrime?.crimeTypes
+    ? selectedCrime.crimeTypes
+        .filter((crimeType) => crimeType.count > 0)
+        .sort((first, second) => second.count - first.count)
+    : []
+  const largestCrimeTypeCount = selectedCrimeTypes[0]?.count || 1
 
   if (error) return <p>{error}</p>
   if (!districts || !visibleDistricts) return <p>Loading Madhya Pradesh districts...</p>
@@ -138,6 +146,44 @@ function App() {
         </label>
         {!crimeData && !crimeError && <span className="layer-status">Loading crime data…</span>}
         {crimeError && <span className="crime-load-error">{crimeError}</span>}
+        {selectedDistrict && (
+          <section className="district-details" aria-label="Selected district crime details">
+            <h3>{selectedDistrictName}</h3>
+            {selectedCrime ? (
+              <>
+                <div className="district-crime-total">
+                  <span>Total reported crimes · 2024</span>
+                  <strong>{formatCount(selectedCrime.total)}</strong>
+                </div>
+                <h4>Crime type breakdown</h4>
+                {selectedCrimeTypes.length > 0 ? (
+                  <div className="district-crime-list">
+                    {selectedCrimeTypes.map((crimeType) => (
+                      <div className="district-crime-row" key={crimeType.name}>
+                        <div className="district-crime-row-label">
+                          <span>{crimeType.name}</span>
+                          <strong>{formatCount(crimeType.count)}</strong>
+                        </div>
+                        <div className="district-crime-track">
+                          <span
+                            style={{ width: `${(crimeType.count / largestCrimeTypeCount) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No crime-type counts were reported for this district.</p>
+                )}
+                <p className="district-crime-note">Only categories with reported cases are listed. Counts are not population-adjusted rates.</p>
+              </>
+            ) : crimeData ? (
+              <p>Crime details are not available for this district boundary.</p>
+            ) : (
+              <p>Loading district crime details…</p>
+            )}
+          </section>
+        )}
         {showCrimeLayer && crimeData && (
           <div className="crime-legend" aria-label="2024 crime map legend">
             <strong>Reported cases by district</strong>

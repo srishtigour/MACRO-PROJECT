@@ -54,6 +54,85 @@
 .layer-option input:disabled { cursor:wait; }
 .layer-status { color:#4b5563; font-size:12px; }
 
+.district-details {
+  border-top: 1px solid #d1d5db;
+  padding-top: 10px;
+  color: #1f2937;
+  text-align: left;
+}
+
+.district-details h3 {
+  margin: 0 0 8px;
+  color: #1f2937;
+  font-size: 16px;
+}
+
+.district-details h4 {
+  margin: 12px 0 6px;
+  color: #374151;
+  font-size: 13px;
+}
+
+.district-crime-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 8px;
+  background: #f3f4f6;
+}
+
+.district-crime-total strong {
+  color: #b91c1c;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.district-crime-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.district-crime-row-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.district-crime-row-label span {
+  overflow-wrap: anywhere;
+}
+
+.district-crime-row-label strong {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.district-crime-track {
+  height: 5px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e5e7eb;
+}
+
+.district-crime-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #d62828;
+}
+
+.district-crime-note {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 10px;
+}
+
 .crime-load-error {
   max-width: 260px;
   border-radius: 5px;
