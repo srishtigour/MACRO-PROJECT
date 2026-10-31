@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: macro-project-api
+    runtime: node
+    buildCommand: npm install --prefix Backend
+    startCommand: npm --prefix Backend start
+    healthCheckPath: /api/health

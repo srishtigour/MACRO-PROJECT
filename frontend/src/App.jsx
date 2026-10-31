@@ -20,6 +20,7 @@ const POPULATION_GROUPS = {
   Rewa: ['Rewa', 'Mauganj'],
   Satna: ['Satna', 'Maihar'],
 }
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
 
 function isValidDistrictFeature(feature) {
   if (!['Polygon', 'MultiPolygon'].includes(feature?.geometry?.type)) return false
@@ -87,7 +88,7 @@ function App() {
   const [populationError, setPopulationError] = useState('')
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/districts')
+    fetch(`${API_BASE_URL}/api/districts`)
       .then((response) => {
         if (!response.ok) throw new Error('Could not load districts.geojson')
         return response.json()
@@ -105,7 +106,7 @@ function App() {
       })
       .catch((err) => setError(err.message))
 
-    fetch('http://localhost:5000/api/crime')
+    fetch(`${API_BASE_URL}/api/crime`)
       .then((response) => {
         if (!response.ok) throw new Error('Could not load the 2024 crime data')
         return response.json()
@@ -118,7 +119,7 @@ function App() {
       })
       .catch((err) => setCrimeError(err.message))
 
-    fetch('http://localhost:5000/api/population')
+    fetch(`${API_BASE_URL}/api/population`)
       .then((response) => {
         if (!response.ok) throw new Error('Could not load the 2026 population estimates')
         return response.json()

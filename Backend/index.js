@@ -4,7 +4,13 @@ const fs = require('node:fs/promises')
 const path = require('node:path')
 
 const app = express()
-const port = 5000
+const port = Number(process.env.PORT) || 5000
+const allowedFrontendOrigins = new Set(
+  (process.env.FRONTEND_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+)
 
 function parseCsv(text) {
   const rows = []
@@ -51,7 +57,19 @@ function parseCsv(text) {
   )
 }
 
-app.use(cors())
+app.use(cors({
+  origin(origin, callback) {
+    const isLocalDevelopment = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || '')
+    if (!origin || isLocalDevelopment || allowedFrontendOrigins.has(origin)) {
+      return callback(null, true)
+    }
+    return callback(new Error('This frontend origin is not allowed by CORS'))
+  },
+}))
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' })
+})
 
 app.get('/api/districts', async (req, res) => {
   try {
@@ -94,6 +112,6 @@ app.get('/api/population', async (req, res) => {
   }
 })
 
-app.listen(port, () => {
-  console.log(`Backend running at http://localhost:${port}`)
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Backend listening on port ${port}`)
 })
