@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const newsService = require('./news-service')
 
 const app = express()
 const port = Number(process.env.PORT) || 5000
@@ -112,6 +113,17 @@ app.get('/api/population', async (req, res) => {
   }
 })
 
+app.get('/api/sex-ratio', async (req, res) => {
+  try {
+    const filePath = path.resolve(__dirname, 'sex-ratio-data-2011.json')
+    const data = await fs.readFile(filePath, 'utf8')
+    res.json(JSON.parse(data))
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Census 2011 sex-ratio data could not be loaded' })
+  }
+})
+
 app.get('/api/literacy', async (req, res) => {
   try {
     const filePath = path.resolve(__dirname, 'literacy-data-2011.json')
@@ -123,6 +135,16 @@ app.get('/api/literacy', async (req, res) => {
   }
 })
 
+app.get('/api/news', async (req, res) => {
+  try {
+    res.json(await newsService.getNewsPayload())
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'News data could not be loaded' })
+  }
+})
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`Backend listening on port ${port}`)
+  newsService.startNewsScheduler()
 })

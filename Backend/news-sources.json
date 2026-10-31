@@ -1,0 +1,32 @@
+[
+  {
+    "name": "The Indian Express · Bhopal",
+    "url": "https://indianexpress.com/section/cities/bhopal/feed/",
+    "mpScoped": true
+  },
+  {
+    "name": "Hindustan Times · Bhopal",
+    "url": "https://www.hindustantimes.com/feeds/rss/cities/bhopal-news/rssfeed.xml",
+    "mpScoped": true
+  },
+  {
+    "name": "ABP News · Madhya Pradesh",
+    "url": "https://www.abplive.com/news/states/madhya-pradesh/feed",
+    "mpScoped": true
+  },
+  {
+    "name": "Amar Ujala · Madhya Pradesh",
+    "url": "https://www.amarujala.com/rss/madhya-pradesh.xml",
+    "mpScoped": true
+  },
+  {
+    "name": "Live Hindustan · Madhya Pradesh",
+    "url": "https://api.livehindustan.com/feeds/rss/madhya-pradesh/bhopal/rssfeed.xml",
+    "mpScoped": true
+  },
+  {
+    "name": "MP News Hindi · Madhya Pradesh",
+    "url": "https://www.mpnewshindi.com/rss/category/Madhya-Pradesh-news-in-Hindi",
+    "mpScoped": true
+  }
+]

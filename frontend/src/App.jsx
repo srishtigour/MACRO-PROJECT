@@ -10,6 +10,12 @@ const CRIME_CLASSES = [
   { label: 'High', color: '#d62828' },
 ]
 const POPULATION_COLORS = ['#eff3ff', '#c6dbef', '#6baed6', '#3182bd', '#08519c']
+const SEX_RATIO_CLASSES = [
+  { label: '< 900', minimum: 0, color: '#d73027' },
+  { label: '900–949', minimum: 900, color: '#fc8d59' },
+  { label: '950–999', minimum: 950, color: '#fee08b' },
+  { label: '1,000+', minimum: 1000, color: '#1a9850' },
+]
 const POPULATION_SOURCE_NAMES = {
   'Agar Malwa': 'Agar-Malwa',
   Hoshangabad: 'Narmadapuram',
@@ -20,6 +26,12 @@ const POPULATION_GROUPS = {
   Rewa: ['Rewa', 'Mauganj'],
   Satna: ['Satna', 'Maihar'],
 }
+const SEX_RATIO_SOURCE_NAMES = {
+  Khargone: 'West Nimar',
+  Khandwa: 'East Nimar',
+  Chhatarpur: 'Chhattarpur',
+}
+const NEWS_COLORS = { none: '#e5e7eb', low: '#bfdbfe', medium: '#60a5fa', high: '#1d4ed8' }
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
 
 const LITERACY_CLASSES = [
@@ -66,6 +78,11 @@ function getPopulationColor(value, breaks) {
   return POPULATION_COLORS[colorIndex === -1 ? POPULATION_COLORS.length - 1 : colorIndex]
 }
 
+function getSexRatioColor(value) {
+  if (!Number.isFinite(value) || value < 0) return '#cbd5e1'
+  return [...SEX_RATIO_CLASSES].reverse().find((item) => value >= item.minimum)?.color || '#cbd5e1'
+}
+
 function getLiteracyColor(value) {
   if (!Number.isFinite(value) || value < 0 || value > 100) return '#cbd5e1'
   const colorClass = [...LITERACY_CLASSES].reverse().find((item) => value >= item.minimum)
@@ -95,13 +112,20 @@ function App() {
   const [districts, setDistricts] = useState(null)
   const [crimeData, setCrimeData] = useState(null)
   const [populationData, setPopulationData] = useState(null)
+  const [sexRatioData, setSexRatioData] = useState(null)
   const [literacyData, setLiteracyData] = useState(null)
   const [selectedDistrict, setSelectedDistrict] = useState(null)
   const [activeLayer, setActiveLayer] = useState('districts')
+  const [populationMetric, setPopulationMetric] = useState('total')
   const [error, setError] = useState('')
   const [crimeError, setCrimeError] = useState('')
   const [populationError, setPopulationError] = useState('')
+  const [sexRatioError, setSexRatioError] = useState('')
   const [literacyError, setLiteracyError] = useState('')
+  const [newsPayload, setNewsPayload] = useState(null)
+  const [newsError, setNewsError] = useState('')
+  const [newsView, setNewsView] = useState('today')
+  const [newsLanguage, setNewsLanguage] = useState('all')
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/districts`)
@@ -148,6 +172,19 @@ function App() {
       })
       .catch((err) => setPopulationError(err.message))
 
+    fetch(`${API_BASE_URL}/api/sex-ratio`)
+      .then((response) => {
+        if (!response.ok) throw new Error('Could not load 2011 Census sex-ratio data')
+        return response.json()
+      })
+      .then((data) => {
+        if (data?.year !== 2011 || !Array.isArray(data?.records)) {
+          throw new Error('Sex-ratio data does not contain valid 2011 district records')
+        }
+        setSexRatioData(data)
+      })
+      .catch((err) => setSexRatioError(err.message))
+
     fetch('http://localhost:5000/api/literacy')
       .then((response) => {
         if (!response.ok) {
@@ -164,6 +201,30 @@ function App() {
       .catch((err) => setLiteracyError(err.message))
   }, [])
 
+  useEffect(() => {
+    let mounted = true
+    const loadNews = () => {
+      fetch(`${API_BASE_URL}/api/news`)
+        .then((response) => {
+          if (!response.ok) throw new Error(`Could not load news (HTTP ${response.status})`)
+          return response.json()
+        })
+        .then((data) => {
+          if (!mounted) return
+          setNewsPayload(data)
+          setNewsError('')
+        })
+        .catch((error) => {
+          if (mounted) setNewsError(error.message)
+        })
+    }
+    loadNews()
+    const interval = window.setInterval(loadNews, 60_000)
+    return () => {
+      mounted = false
+      window.clearInterval(interval)
+    }
+  }, [])
   const visibleDistricts = useMemo(() => {
     if (!districts) return null
     return selectedDistrict
@@ -246,6 +307,50 @@ function App() {
     )
   }, [populationByDistrict])
 
+  const sexRatioByDistrict = useMemo(() => {
+    if (!districts || !sexRatioData) return null
+
+    const counts = new Map()
+    sexRatioData.records.forEach((record) => {
+      const name = record.district_name?.trim()
+      if (name) counts.set(name, (counts.get(name) || 0) + 1)
+    })
+    const duplicates = new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name))
+    const recordsByName = new Map(
+      sexRatioData.records
+        .filter((record) => !duplicates.has(record.district_name?.trim()))
+        .map((record) => [record.district_name.trim(), record]),
+    )
+    const matchedNames = new Set()
+    const values = {}
+
+    districts.features.forEach((feature) => {
+      const districtName = feature.properties?.dtname
+      const sourceName = SEX_RATIO_SOURCE_NAMES[districtName] || districtName
+      const record = recordsByName.get(sourceName)
+      if (
+        record &&
+        Number.isFinite(record.sex_ratio) &&
+        record.sex_ratio >= 0 &&
+        record.sex_ratio <= 2000
+      ) {
+        values[districtName] = record
+        matchedNames.add(sourceName)
+      }
+    })
+
+    return {
+      values,
+      duplicateNames: [...duplicates],
+      unmatchedNames: sexRatioData.records
+        .filter((record) => !matchedNames.has(record.district_name?.trim()))
+        .map((record) => record.district_name?.trim()),
+      unavailableDistricts: districts.features
+        .map((feature) => feature.properties?.dtname)
+        .filter((name) => !values[name]),
+    }
+  }, [districts, sexRatioData])
+
   const literacyByCode = useMemo(() => {
     if (!districts || !literacyData) return null
 
@@ -290,9 +395,20 @@ function App() {
     }
   }, [districts, literacyData])
 
+  const newsEvents = newsView === 'today'
+    ? newsPayload?.today?.events || []
+    : newsPayload?.publishedDigest?.events || []
+  const languageNewsEvents = newsEvents.filter((event) => newsLanguage === 'all' || event.language === newsLanguage)
+  const visibleNewsEvents = languageNewsEvents.filter((event) => !selectedDistrict || (event.mapDistrict || event.district) === selectedDistrict?.properties?.dtname)
+  const newsDistrictCounts = useMemo(() => languageNewsEvents.reduce((counts, event) => {
+    const boundaryName = event.mapDistrict || event.district
+    if (boundaryName) counts[boundaryName] = (counts[boundaryName] || 0) + 1
+    return counts
+  }, {}), [languageNewsEvents])
   const selectedDistrictName = selectedDistrict?.properties?.dtname || 'Selected district'
   const selectedCrime = crimeData?.districts?.[selectedDistrictName]
   const selectedPopulation = populationByDistrict?.values?.[selectedDistrictName]
+  const selectedSexRatio = sexRatioByDistrict?.values?.[selectedDistrictName]
   const selectedLiteracy = literacyByCode?.values?.[String(selectedDistrict?.properties?.dtcode11)]
   const selectedCrimeTypes = selectedCrime?.crimeTypes
     ? selectedCrime.crimeTypes
@@ -319,9 +435,19 @@ function App() {
             onClick={() => setActiveLayer('crime')}>Crime</button>
           <button type="button" aria-pressed={activeLayer === 'population'}
             onClick={() => setActiveLayer('population')}>Population</button>
+          <button type="button" aria-pressed={activeLayer === 'news'} onClick={() => setActiveLayer('news')}>News · Live</button>
           <button type="button" aria-pressed={activeLayer === 'literacy'}
             onClick={() => setActiveLayer('literacy')}>Literacy 2011</button>
         </div>
+        {activeLayer === 'population' && (
+          <div className="population-metric-selector" role="group" aria-label="Population data type">
+            <span>Population breakdown</span>
+            <button type="button" aria-pressed={populationMetric === 'total'}
+              onClick={() => setPopulationMetric('total')}>Total population</button>
+            <button type="button" aria-pressed={populationMetric === 'sexRatio'}
+              onClick={() => setPopulationMetric('sexRatio')}>Sex ratio · Census 2011</button>
+          </div>
+        )}
         {activeLayer === 'crime' && !crimeData && !crimeError &&
           <span className="layer-status">Loading crime data…</span>}
         {activeLayer === 'crime' && crimeError &&
@@ -330,8 +456,14 @@ function App() {
           <span className="layer-status">Loading 2026 population estimates…</span>}
         {activeLayer === 'population' && populationError &&
           <span className="crime-load-error">{populationError}</span>}
+        {activeLayer === 'population' && populationMetric === 'sexRatio' && !sexRatioData && !sexRatioError &&
+          <span className="layer-status">Loading 2011 Census sex-ratio data…</span>}
+        {activeLayer === 'population' && populationMetric === 'sexRatio' && sexRatioError &&
+          <span className="crime-load-error">{sexRatioError}</span>}
         {activeLayer === 'literacy' && !literacyData && !literacyError &&
           <span className="layer-status">Loading Census literacy data…</span>}
+        {activeLayer === 'news' && newsError &&
+          <span className="crime-load-error">{newsError}</span>}
         {activeLayer === 'literacy' && literacyError &&
           <span className="crime-load-error">{literacyError}</span>}
 
@@ -368,6 +500,19 @@ function App() {
               <p>Crime details are not available for this district boundary.</p>
             ) : activeLayer === 'crime' ? (
               <p>Loading district crime details…</p>
+            ) : activeLayer === 'population' && populationMetric === 'sexRatio' && selectedSexRatio ? (
+              <>
+                <div className="literacy-data-type">Official Census value · 2011</div>
+                <div className="district-crime-total">
+                  <span>Sex ratio</span>
+                  <strong>{formatCount(selectedSexRatio.sex_ratio)}</strong>
+                </div>
+                <p className="district-crime-note">Females per 1,000 males. Source: Census 2011 district table.</p>
+              </>
+            ) : activeLayer === 'population' && populationMetric === 'sexRatio' && sexRatioByDistrict ? (
+              <p>No separate Census 2011 sex-ratio value is available for this boundary; no parent district value was copied.</p>
+            ) : activeLayer === 'population' && populationMetric === 'sexRatio' ? (
+              <p>Loading Census 2011 sex-ratio data…</p>
             ) : activeLayer === 'population' && selectedPopulation ? (
               <>
                 <div className="district-crime-total">
@@ -377,9 +522,9 @@ function App() {
                 <p className="district-crime-note">Third-party estimate; not an official Census count.
                   {selectedPopulation.grouped && ` Combined from ${selectedPopulation.sourceNames.join(' + ')} to match this existing boundary.`}</p>
               </>
-            ) : activeLayer === 'population' && populationByDistrict ? (
+            ) : activeLayer === 'population' && populationMetric === 'total' && populationByDistrict ? (
               <p>Population estimate unavailable for this boundary; no other district’s value was assigned.</p>
-            ) : activeLayer === 'population' ? (
+            ) : activeLayer === 'population' && populationMetric === 'total' ? (
               <p>Loading district population estimate…</p>
             ) : activeLayer === 'literacy' && selectedLiteracy ? (
               <>
@@ -423,7 +568,7 @@ function App() {
           </div>
         )}
 
-        {activeLayer === 'population' && populationByDistrict && (
+        {activeLayer === 'population' && populationMetric === 'total' && populationByDistrict && (
           <div className="crime-legend" aria-label="2026 estimated population map legend">
             <strong>Estimated population · 2026</strong>
             <span className="crime-legend-subtitle">Third-party estimates; not official Census counts</span>
@@ -460,6 +605,52 @@ function App() {
           </div>
         )}
 
+        {activeLayer === 'population' && populationMetric === 'sexRatio' && sexRatioByDistrict && (
+          <div className="crime-legend" aria-label="2011 Census sex-ratio map legend">
+            <strong>Sex Ratio · Census 2011</strong>
+            <span className="crime-legend-subtitle">Females per 1,000 males</span>
+            <div className="crime-legend-items">
+              {SEX_RATIO_CLASSES.map((item) => (
+                <div className="crime-legend-item" key={item.label}>
+                  <span className="crime-legend-swatch" style={{ backgroundColor: item.color }} />
+                  <span>{item.label}</span>
+                </div>
+              ))}
+              <div className="crime-legend-item">
+                <span className="crime-legend-swatch" style={{ backgroundColor: '#cbd5e1' }} />
+                <span>Unavailable</span>
+              </div>
+            </div>
+            <p>Higher values mean more females per 1,000 males. The workbook covers 50 Census 2011 districts; newer or unmatched boundaries are left unavailable.</p>
+            {sexRatioByDistrict.unavailableDistricts.length > 0 &&
+              <p>Unavailable boundaries: {sexRatioByDistrict.unavailableDistricts.join(', ')}.</p>}
+            {sexRatioByDistrict.duplicateNames.length > 0 &&
+              <p>Duplicate workbook district names left unmapped: {sexRatioByDistrict.duplicateNames.join(', ')}.</p>}
+            {sexRatioByDistrict.unmatchedNames.length > 0 &&
+              <p>Workbook districts without matching map boundaries: {sexRatioByDistrict.unmatchedNames.join(', ')}.</p>}
+          </div>
+        )}
+
+        {activeLayer === 'news' && (
+          <div className="crime-legend" aria-label="News by district map legend">
+            <strong>{newsView === 'today' ? 'Today’s collected news' : 'Yesterday’s news digest'}</strong>
+            <span className="crime-legend-subtitle">Fill shows grouped reports matched to each district</span>
+            <div className="crime-legend-items">
+              {[
+                ['No matched stories', NEWS_COLORS.none],
+                ['1 story', NEWS_COLORS.low],
+                ['2–3 stories', NEWS_COLORS.medium],
+                ['4+ stories', NEWS_COLORS.high],
+              ].map(([label, color]) => (
+                <div className="crime-legend-item" key={label}>
+                  <span className="crime-legend-swatch" style={{ backgroundColor: color }} />
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+            <p>Today’s map updates as feeds are checked. Stories without a clearly matched district stay in the news list.</p>
+          </div>
+        )}
         {activeLayer === 'literacy' && literacyByCode && (
           <div className="crime-legend literacy-legend" aria-label="Census 2011 literacy rate legend">
             <strong>Literacy Rate (Census 2011)</strong>
@@ -483,6 +674,78 @@ function App() {
               <p>Census district codes without a matching map feature: {literacyByCode.unmatchedCodes.join(', ')}.</p>}
           </div>
         )}
+        {activeLayer === 'news' && (
+          <section className="news-panel" aria-label="Madhya Pradesh news">
+            <div className="news-view-selector" role="group" aria-label="Choose news date">
+              <button type="button" aria-pressed={newsView === 'today'} onClick={() => setNewsView('today')}>Today · updating</button>
+              <button type="button" aria-pressed={newsView === 'digest'} onClick={() => setNewsView('digest')}>Yesterday’s digest</button>
+            </div>
+            <div className="news-language-selector" role="group" aria-label="Filter news language">
+              {[
+                ['all', 'All'],
+                ['en', 'English'],
+                ['hi', 'Hindi'],
+              ].map(([language, label]) => (
+                <button key={language} type="button" aria-pressed={newsLanguage === language}
+                  onClick={() => setNewsLanguage(language)}>{label}</button>
+              ))}
+            </div>
+            {newsPayload ? (
+              <>
+                <p className="news-collection-status">
+                  {newsView === 'today'
+                    ? `Today’s news is checked every 15 minutes. ${newsPayload.today.collectedArticleCount} articles collected so far.`
+                    : newsPayload.publishedDigest
+                      ? `Digest for ${newsPayload.publishedDigest.forDate}, published at 6:00 AM IST.`
+                      : 'No digest has been published yet. Yesterday’s collected news appears here after 6:00 AM IST.'}
+                </p>
+                {newsPayload.status.lastCollectionAt && (
+                  <p className="news-last-checked">Last checked: {new Date(newsPayload.status.lastCollectionAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST</p>
+                )}
+                {selectedDistrict && <p className="news-district-filter">Showing {selectedDistrictName} news. Select “Show All Districts” to see all districts.</p>}
+                {visibleNewsEvents.length ? (
+                  <div className="news-story-list">
+                    {visibleNewsEvents.map((event) => (
+                      <article className="news-story" key={event.id}>
+                        <span className="news-story-place">{event.district ? `${event.district}${event.mapDistrict && event.mapDistrict !== event.district ? ` · shown on ${event.mapDistrict} boundary` : ''}` : 'Madhya Pradesh · district not identified'}</span>
+                        <h3>{event.title}</h3>
+                        {event.description && <p>{event.description}</p>}
+                        <div className="news-story-meta">
+                          <span>{event.articleCount > 1 ? `${event.articleCount} related reports` : '1 report'}</span>
+                          <span>{event.language === 'hi' ? 'Hindi' : 'English'}</span>
+                        </div>
+                        {event.descriptionSource && <span className="news-description-source">Description from {event.descriptionSource}</span>}
+                        <div className="news-source-links">
+                          {event.sources.map((source) => (
+                            <a key={`${event.id}-${source.name}`} href={source.url} target="_blank" rel="noreferrer">{source.name}</a>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="news-empty-state">
+                    {newsView === 'digest' && !newsPayload.publishedDigest
+                      ? 'The daily digest will appear here after it is first published.'
+                      : selectedDistrict
+                        ? `No ${newsLanguage === 'all' ? '' : `${newsLanguage === 'hi' ? 'Hindi' : 'English'} `}news has been matched to ${selectedDistrictName} in this view yet.`
+                        : 'No matching MP stories have been collected for this view yet.'}
+                  </p>
+                )}
+                <div className="news-source-status">
+                  <strong>Feed status</strong>
+                  {newsPayload.status.sourceStatus.length ? newsPayload.status.sourceStatus.map((source) => (
+                    <span key={source.source} className={source.ok ? 'news-source-ok' : 'news-source-failed'}>
+                      {source.ok ? '●' : '○'} {source.source}{source.error ? ` · ${source.error}` : ''}
+                    </span>
+                  )) : <span>Waiting for the first feed check…</span>}
+                </div>
+              </>
+            ) : (
+              <p className="news-empty-state">{newsError || 'Loading Madhya Pradesh news…'}</p>
+            )}
+          </section>
+        )}
       </aside>
 
       {selectedDistrict && (
@@ -504,14 +767,25 @@ function App() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <GeoJSON
-          key={`${selectedDistrictName}-${activeLayer}`}
+          key={`${selectedDistrictName}-${activeLayer}-${populationMetric}-${newsView}-${newsLanguage}-${newsPayload?.status.lastCollectionAt}`}
           data={visibleDistricts}
           style={(feature) => {
             const isSelected = feature === selectedDistrict
             const districtName = feature.properties?.dtname
             const crimeCount = crimeData?.districts?.[districtName]?.total
             const population = populationByDistrict?.values?.[districtName]?.total
+            const sexRatio = sexRatioByDistrict?.values?.[districtName]?.sex_ratio
             const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
+            const newsCount = newsDistrictCounts[districtName] || 0
+
+            if (activeLayer === 'news') {
+              return {
+                color: isSelected ? '#1f2937' : '#ffffff',
+                weight: isSelected ? 3 : 1,
+                fillColor: newsCount >= 4 ? NEWS_COLORS.high : newsCount >= 2 ? NEWS_COLORS.medium : newsCount === 1 ? NEWS_COLORS.low : NEWS_COLORS.none,
+                fillOpacity: 0.82,
+              }
+            }
 
             if (activeLayer === 'crime') {
               return {
@@ -519,6 +793,15 @@ function App() {
                 weight: isSelected ? 3 : 1,
                 fillColor: getCrimeColor(crimeCount, crimeBreaks),
                 fillOpacity: 0.78,
+              }
+            }
+
+            if (activeLayer === 'population' && populationMetric === 'sexRatio') {
+              return {
+                color: isSelected ? '#1f2937' : '#ffffff',
+                weight: isSelected ? 3 : 1,
+                fillColor: getSexRatioColor(sexRatio),
+                fillOpacity: 0.84,
               }
             }
 
@@ -558,19 +841,27 @@ function App() {
             const districtName = feature.properties?.dtname || 'District'
             const crimeCount = crimeData?.districts?.[districtName]?.total
             const population = populationByDistrict?.values?.[districtName]
+            const sexRatio = sexRatioByDistrict?.values?.[districtName]?.sex_ratio
             const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
-            const tooltip = activeLayer === 'crime' && Number.isFinite(crimeCount)
-              ? `${districtName}: ${formatCount(crimeCount)} reported crimes against women in 2024`
-              : activeLayer === 'population' && population
-                ? `${districtName}: ${formatCount(population.total)} estimated population in 2026`
-                : activeLayer === 'population'
-                  ? `${districtName}: population estimate unavailable`
-                  : activeLayer === 'literacy' && literacy
-                    ? `${districtName} (2011 Census: ${literacy.district_name.trim()}): ${literacy.literacy_rate.toFixed(2)}% literacy; ${formatCount(literacy.literate_population)} literate people; total population ${formatCount(literacy.total_population)}; official Census value`
-                    : activeLayer === 'literacy'
-                      ? `${districtName}: literacy rate unavailable; no 2011 tehsil rows were provided for a derived value`
-                  : districtName
-
+            const newsCount = newsDistrictCounts[districtName] || 0
+            const newsPeriod = newsView === 'today' ? 'in today’s collection' : 'in yesterday’s digest'
+            const tooltip = activeLayer === 'news'
+              ? `${districtName}: ${newsCount} grouped news stories ${newsPeriod}`
+              : activeLayer === 'crime' && Number.isFinite(crimeCount)
+                ? `${districtName}: ${formatCount(crimeCount)} reported crimes against women in 2024`
+                : activeLayer === 'population' && populationMetric === 'sexRatio' && Number.isFinite(sexRatio)
+                  ? `${districtName}: ${formatCount(sexRatio)} females per 1,000 males (Census 2011)`
+                  : activeLayer === 'population' && populationMetric === 'sexRatio'
+                    ? `${districtName}: Census 2011 sex ratio unavailable`
+                    : activeLayer === 'population' && population
+                      ? `${districtName}: ${formatCount(population.total)} estimated population in 2026`
+                      : activeLayer === 'population'
+                        ? `${districtName}: population estimate unavailable`
+                        : activeLayer === 'literacy' && literacy
+                          ? `${districtName} (2011 Census: ${literacy.district_name.trim()}): ${literacy.literacy_rate.toFixed(2)}% literacy; ${formatCount(literacy.literate_population)} literate people; total population ${formatCount(literacy.total_population)}; official Census value`
+                          : activeLayer === 'literacy'
+                            ? `${districtName}: literacy rate unavailable; no 2011 tehsil rows were provided for a derived value`
+                            : districtName
             layer.bindTooltip(tooltip, { sticky: true })
             if (!selectedDistrict) {
               layer.on({ click: () => selectDistrict(feature) })
@@ -584,3 +875,10 @@ function App() {
 }
 
 export default App
+
+
+
+
+
+
+
