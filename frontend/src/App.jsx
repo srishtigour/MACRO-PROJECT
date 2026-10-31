@@ -22,6 +22,14 @@ const POPULATION_GROUPS = {
 }
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
 
+const LITERACY_CLASSES = [
+  { label: '0–49.99%', minimum: 0, color: '#ffffcc' },
+  { label: '50–59.99%', minimum: 50, color: '#c2e699' },
+  { label: '60–69.99%', minimum: 60, color: '#78c679' },
+  { label: '70–79.99%', minimum: 70, color: '#31a354' },
+  { label: '80–100%', minimum: 80, color: '#006837' },
+]
+
 function isValidDistrictFeature(feature) {
   if (!['Polygon', 'MultiPolygon'].includes(feature?.geometry?.type)) return false
 
@@ -58,6 +66,12 @@ function getPopulationColor(value, breaks) {
   return POPULATION_COLORS[colorIndex === -1 ? POPULATION_COLORS.length - 1 : colorIndex]
 }
 
+function getLiteracyColor(value) {
+  if (!Number.isFinite(value) || value < 0 || value > 100) return '#cbd5e1'
+  const colorClass = [...LITERACY_CLASSES].reverse().find((item) => value >= item.minimum)
+  return colorClass?.color || '#cbd5e1'
+}
+
 function formatCount(value) {
   return new Intl.NumberFormat('en-IN').format(value)
 }
@@ -81,11 +95,13 @@ function App() {
   const [districts, setDistricts] = useState(null)
   const [crimeData, setCrimeData] = useState(null)
   const [populationData, setPopulationData] = useState(null)
+  const [literacyData, setLiteracyData] = useState(null)
   const [selectedDistrict, setSelectedDistrict] = useState(null)
   const [activeLayer, setActiveLayer] = useState('districts')
   const [error, setError] = useState('')
   const [crimeError, setCrimeError] = useState('')
   const [populationError, setPopulationError] = useState('')
+  const [literacyError, setLiteracyError] = useState('')
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/districts`)
@@ -131,6 +147,21 @@ function App() {
         setPopulationData(data)
       })
       .catch((err) => setPopulationError(err.message))
+
+    fetch('http://localhost:5000/api/literacy')
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Could not load the 2011 Census literacy data (HTTP ${response.status})`)
+        }
+        return response.json()
+      })
+      .then((data) => {
+        if (!Array.isArray(data?.records)) {
+          throw new Error('Census literacy data does not contain a valid record list')
+        }
+        setLiteracyData(data)
+      })
+      .catch((err) => setLiteracyError(err.message))
   }, [])
 
   const visibleDistricts = useMemo(() => {
@@ -215,9 +246,54 @@ function App() {
     )
   }, [populationByDistrict])
 
+  const literacyByCode = useMemo(() => {
+    if (!districts || !literacyData) return null
+
+    const recordCounts = new Map()
+    literacyData.records.forEach((record) => {
+      const code = String(record.census_district_code)
+      recordCounts.set(code, (recordCounts.get(code) || 0) + 1)
+    })
+    const duplicateCodes = new Set(
+      [...recordCounts].filter(([, count]) => count > 1).map(([code]) => code),
+    )
+    const recordsByCode = new Map(
+      literacyData.records
+        .filter((record) => !duplicateCodes.has(String(record.census_district_code)))
+        .map((record) => [String(record.census_district_code), record]),
+    )
+    const featureCodes = new Set(
+      districts.features.map((feature) => String(feature.properties?.dtcode11)),
+    )
+    const values = {}
+
+    districts.features.forEach((feature) => {
+      const code = String(feature.properties?.dtcode11)
+      const record = recordsByCode.get(code)
+      if (
+        record?.data_type === 'census' &&
+        record.data_year === 2011 &&
+        Number.isFinite(record.literacy_rate) &&
+        record.literacy_rate >= 0 &&
+        record.literacy_rate <= 100
+      ) {
+        values[code] = record
+      }
+    })
+
+    return {
+      values,
+      duplicateCodes: [...duplicateCodes],
+      unmatchedCodes: literacyData.records
+        .filter((record) => !featureCodes.has(String(record.census_district_code)))
+        .map((record) => record.census_district_code),
+    }
+  }, [districts, literacyData])
+
   const selectedDistrictName = selectedDistrict?.properties?.dtname || 'Selected district'
   const selectedCrime = crimeData?.districts?.[selectedDistrictName]
   const selectedPopulation = populationByDistrict?.values?.[selectedDistrictName]
+  const selectedLiteracy = literacyByCode?.values?.[String(selectedDistrict?.properties?.dtcode11)]
   const selectedCrimeTypes = selectedCrime?.crimeTypes
     ? selectedCrime.crimeTypes
         .filter((crimeType) => crimeType.count > 0)
@@ -243,6 +319,8 @@ function App() {
             onClick={() => setActiveLayer('crime')}>Crime</button>
           <button type="button" aria-pressed={activeLayer === 'population'}
             onClick={() => setActiveLayer('population')}>Population</button>
+          <button type="button" aria-pressed={activeLayer === 'literacy'}
+            onClick={() => setActiveLayer('literacy')}>Literacy 2011</button>
         </div>
         {activeLayer === 'crime' && !crimeData && !crimeError &&
           <span className="layer-status">Loading crime data…</span>}
@@ -252,6 +330,10 @@ function App() {
           <span className="layer-status">Loading 2026 population estimates…</span>}
         {activeLayer === 'population' && populationError &&
           <span className="crime-load-error">{populationError}</span>}
+        {activeLayer === 'literacy' && !literacyData && !literacyError &&
+          <span className="layer-status">Loading Census literacy data…</span>}
+        {activeLayer === 'literacy' && literacyError &&
+          <span className="crime-load-error">{literacyError}</span>}
 
         {selectedDistrict && (
           <section className="district-details" aria-label="Selected district details">
@@ -299,6 +381,25 @@ function App() {
               <p>Population estimate unavailable for this boundary; no other district’s value was assigned.</p>
             ) : activeLayer === 'population' ? (
               <p>Loading district population estimate…</p>
+            ) : activeLayer === 'literacy' && selectedLiteracy ? (
+              <>
+                <div className="literacy-data-type">Official Census value · 2011</div>
+                <div className="district-crime-total">
+                  <span>Literacy rate</span>
+                  <strong>{selectedLiteracy.literacy_rate.toFixed(2)}%</strong>
+                </div>
+                <dl className="literacy-details">
+                  <div><dt>Literate population</dt><dd>{formatCount(selectedLiteracy.literate_population)}</dd></div>
+                  <div><dt>Total population</dt><dd>{formatCount(selectedLiteracy.total_population)}</dd></div>
+                  <div><dt>Population aged 0–6</dt><dd>{formatCount(selectedLiteracy.population_age_0_6)}</dd></div>
+                  <div><dt>Population aged 7+</dt><dd>{formatCount(selectedLiteracy.population_age_7_plus)}</dd></div>
+                </dl>
+                <p className="district-crime-note">Rate uses literate population divided by population aged 7+.</p>
+              </>
+            ) : activeLayer === 'literacy' && literacyByCode ? (
+              <p>No separate 2011 Census/tehsil records are available for this district. The value is unavailable; no parent district’s rate was copied.</p>
+            ) : activeLayer === 'literacy' ? (
+              <p>Loading Census literacy data…</p>
             ) : (
               <p>Select Crime or Population to view district data.</p>
             )}
@@ -358,6 +459,30 @@ function App() {
               <p>Unmatched CSV districts left unmapped: {populationByDistrict.unmatchedNames.join(', ')}.</p>}
           </div>
         )}
+
+        {activeLayer === 'literacy' && literacyByCode && (
+          <div className="crime-legend literacy-legend" aria-label="Census 2011 literacy rate legend">
+            <strong>Literacy Rate (Census 2011)</strong>
+            <span className="crime-legend-subtitle">Official district-level Census values</span>
+            <div className="crime-legend-items">
+              {LITERACY_CLASSES.map((item) => (
+                <div className="crime-legend-item" key={item.label}>
+                  <span className="crime-legend-swatch" style={{ backgroundColor: item.color }} />
+                  <span>{item.label}</span>
+                </div>
+              ))}
+              <div className="crime-legend-item">
+                <span className="crime-legend-swatch" style={{ backgroundColor: '#cbd5e1' }} />
+                <span>Unavailable</span>
+              </div>
+            </div>
+            <p>Source: Census of India, Primary Census Abstract 2011. Rate = literate population ÷ population aged 7+ × 100. The workbook contains no tehsil rows, so Agar Malwa and Niwari are unavailable; no rates were estimated.</p>
+            {literacyByCode.duplicateCodes.length > 0 &&
+              <p>Duplicate Census codes left unmapped: {literacyByCode.duplicateCodes.join(', ')}.</p>}
+            {literacyByCode.unmatchedCodes.length > 0 &&
+              <p>Census district codes without a matching map feature: {literacyByCode.unmatchedCodes.join(', ')}.</p>}
+          </div>
+        )}
       </aside>
 
       {selectedDistrict && (
@@ -386,6 +511,7 @@ function App() {
             const districtName = feature.properties?.dtname
             const crimeCount = crimeData?.districts?.[districtName]?.total
             const population = populationByDistrict?.values?.[districtName]?.total
+            const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
 
             if (activeLayer === 'crime') {
               return {
@@ -402,6 +528,15 @@ function App() {
                 weight: isSelected ? 3 : 1,
                 fillColor: getPopulationColor(population, populationBreaks),
                 fillOpacity: 0.82,
+              }
+            }
+
+            if (activeLayer === 'literacy') {
+              return {
+                color: isSelected ? '#1f2937' : '#ffffff',
+                weight: isSelected ? 3 : 1,
+                fillColor: getLiteracyColor(literacy?.literacy_rate),
+                fillOpacity: 0.84,
               }
             }
 
@@ -423,12 +558,17 @@ function App() {
             const districtName = feature.properties?.dtname || 'District'
             const crimeCount = crimeData?.districts?.[districtName]?.total
             const population = populationByDistrict?.values?.[districtName]
+            const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
             const tooltip = activeLayer === 'crime' && Number.isFinite(crimeCount)
               ? `${districtName}: ${formatCount(crimeCount)} reported crimes against women in 2024`
               : activeLayer === 'population' && population
                 ? `${districtName}: ${formatCount(population.total)} estimated population in 2026`
                 : activeLayer === 'population'
                   ? `${districtName}: population estimate unavailable`
+                  : activeLayer === 'literacy' && literacy
+                    ? `${districtName} (2011 Census: ${literacy.district_name.trim()}): ${literacy.literacy_rate.toFixed(2)}% literacy; ${formatCount(literacy.literate_population)} literate people; total population ${formatCount(literacy.total_population)}; official Census value`
+                    : activeLayer === 'literacy'
+                      ? `${districtName}: literacy rate unavailable; no 2011 tehsil rows were provided for a derived value`
                   : districtName
 
             layer.bindTooltip(tooltip, { sticky: true })

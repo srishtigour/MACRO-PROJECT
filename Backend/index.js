@@ -112,6 +112,17 @@ app.get('/api/population', async (req, res) => {
   }
 })
 
+app.get('/api/literacy', async (req, res) => {
+  try {
+    const filePath = path.resolve(__dirname, 'literacy-data-2011.json')
+    const data = await fs.readFile(filePath, 'utf8')
+    res.json(JSON.parse(data))
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Census literacy data could not be loaded' })
+  }
+})
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`Backend listening on port ${port}`)
 })
