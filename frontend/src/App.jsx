@@ -10,6 +10,8 @@ const CRIME_CLASSES = [
   { label: 'High', color: '#d62828' },
 ]
 const POPULATION_COLORS = ['#eff3ff', '#c6dbef', '#6baed6', '#3182bd', '#08519c']
+const WORKER_COLORS = ['#fce4ec', '#f48fb1', '#c2185b']
+const MALE_WORKER_COLORS = ['#ede9fe', '#a78bfa', '#6d28d9']
 const SEX_RATIO_CLASSES = [
   { label: '< 900', minimum: 0, color: '#d73027' },
   { label: '900–949', minimum: 900, color: '#fc8d59' },
@@ -81,6 +83,15 @@ function getPopulationColor(value, breaks) {
 
   const colorIndex = breaks.findIndex((limit) => value <= limit)
   return POPULATION_COLORS[colorIndex === -1 ? POPULATION_COLORS.length - 1 : colorIndex]
+}
+
+function getWorkerColor(value, breaks, colors) {
+  if (!Number.isFinite(value) || breaks.length !== colors.length - 1) {
+    return '#cbd5e1'
+  }
+
+  const colorIndex = breaks.findIndex((limit) => value <= limit)
+  return colors[colorIndex === -1 ? colors.length - 1 : colorIndex]
 }
 
 function getSexRatioColor(value) {
@@ -163,15 +174,18 @@ function App() {
   const [crimeData, setCrimeData] = useState(null)
   const [populationData, setPopulationData] = useState(null)
   const [sexRatioData, setSexRatioData] = useState(null)
+  const [workforceData, setWorkforceData] = useState(null)
   const [literacyData, setLiteracyData] = useState(null)
   const [pciData, setPciData] = useState(null)
   const [selectedDistrict, setSelectedDistrict] = useState(null)
   const [activeLayer, setActiveLayer] = useState('districts')
   const [populationMetric, setPopulationMetric] = useState('total')
+  const [workerSex, setWorkerSex] = useState('female')
   const [error, setError] = useState('')
   const [crimeError, setCrimeError] = useState('')
   const [populationError, setPopulationError] = useState('')
   const [sexRatioError, setSexRatioError] = useState('')
+  const [workforceError, setWorkforceError] = useState('')
   const [literacyError, setLiteracyError] = useState('')
   const [newsPayload, setNewsPayload] = useState(null)
   const [newsError, setNewsError] = useState('')
@@ -235,6 +249,19 @@ function App() {
         setSexRatioData(data)
       })
       .catch((err) => setSexRatioError(err.message))
+
+    fetch(`${API_BASE_URL}/api/workforce`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Could not load Census 2011 workforce data (HTTP ${response.status})`)
+        return response.json()
+      })
+      .then((data) => {
+        if (data?.year !== 2011 || !Array.isArray(data?.records)) {
+          throw new Error('Workforce data does not contain valid Census 2011 district records')
+        }
+        setWorkforceData(data)
+      })
+      .catch((err) => setWorkforceError(err.message))
 
     fetch('http://localhost:5000/api/literacy')
       .then((response) => {
@@ -417,6 +444,63 @@ function App() {
     }
   }, [districts, sexRatioData])
 
+  const workforceByCode = useMemo(() => {
+    if (!districts || !workforceData) return null
+
+    const recordCounts = new Map()
+    workforceData.records.forEach((record) => {
+      const code = String(record.census_district_code)
+      recordCounts.set(code, (recordCounts.get(code) || 0) + 1)
+    })
+    const duplicateCodes = new Set([...recordCounts].filter(([, count]) => count > 1).map(([code]) => code))
+    const recordsByCode = new Map(
+      workforceData.records
+        .filter((record) => !duplicateCodes.has(String(record.census_district_code)))
+        .map((record) => [String(record.census_district_code), record]),
+    )
+    const values = {}
+
+    districts.features.forEach((feature) => {
+      const code = String(feature.properties?.dtcode11)
+      const record = recordsByCode.get(code)
+      if (
+        record &&
+        Number.isFinite(record.workers_male) &&
+        Number.isFinite(record.workers_female) &&
+        Number.isFinite(record.population_male) &&
+        Number.isFinite(record.population_female) &&
+        record.population_male > 0 &&
+        record.population_female > 0
+      ) {
+        values[code] = record
+      }
+    })
+
+    return {
+      values,
+      duplicateCodes: [...duplicateCodes],
+      unavailableDistricts: districts.features
+        .filter((feature) => !values[String(feature.properties?.dtcode11)])
+        .map((feature) => feature.properties?.dtname),
+      unmatchedDistricts: workforceData.records
+        .filter((record) => !districts.features.some((feature) => String(feature.properties?.dtcode11) === String(record.census_district_code)))
+        .map((record) => record.district_name),
+    }
+  }, [districts, workforceData])
+
+  const workforceRates = useMemo(() => {
+    if (!workforceByCode) return {}
+    return Object.fromEntries(Object.entries(workforceByCode.values).map(([code, record]) => {
+      const workers = workerSex === 'female' ? record.workers_female : record.workers_male
+      const population = workerSex === 'female' ? record.population_female : record.population_male
+      return [code, workers / population * 100]
+    }))
+  }, [workforceByCode, workerSex])
+
+  const workforceBreaks = useMemo(() => {
+    return getQuantileBreaks(Object.values(workforceRates), WORKER_COLORS.length)
+  }, [workforceRates])
+
   const literacyByCode = useMemo(() => {
     if (!districts || !literacyData) return null
 
@@ -524,6 +608,16 @@ function App() {
   const selectedCrime = crimeData?.districts?.[selectedDistrictName]
   const selectedPopulation = populationByDistrict?.values?.[selectedDistrictName]
   const selectedSexRatio = sexRatioByDistrict?.values?.[selectedDistrictName]
+  const selectedWorkforce = workforceByCode?.values?.[String(selectedDistrict?.properties?.dtcode11)]
+  const workerColors = workerSex === 'female' ? WORKER_COLORS : MALE_WORKER_COLORS
+  const selectedWorkerCount = selectedWorkforce
+    ? workerSex === 'female' ? selectedWorkforce.workers_female : selectedWorkforce.workers_male
+    : null
+  const selectedWorkerRate = selectedWorkforce
+    ? workerSex === 'female'
+      ? selectedWorkforce.workers_female / selectedWorkforce.population_female * 100
+      : selectedWorkforce.workers_male / selectedWorkforce.population_male * 100
+    : null
   const selectedLiteracy = literacyByCode?.values?.[String(selectedDistrict?.properties?.dtcode11)]
   const selectedPci = pciByDistrict?.values?.[normalizeDistrictName(selectedDistrictName)]
   const selectedCrimeTypes = selectedCrime?.crimeTypes
@@ -564,6 +658,17 @@ function App() {
               onClick={() => setPopulationMetric('total')}>Total population</button>
             <button type="button" aria-pressed={populationMetric === 'sexRatio'}
               onClick={() => setPopulationMetric('sexRatio')}>Sex ratio · Census 2011</button>
+            <button type="button" aria-pressed={populationMetric === 'workers'}
+              onClick={() => setPopulationMetric('workers')}>Workers by sex · Census 2011</button>
+          </div>
+        )}
+        {activeLayer === 'population' && populationMetric === 'workers' && (
+          <div className="population-metric-selector" role="group" aria-label="Choose worker sex for the map">
+            <span>Map worker participation rate</span>
+            <button type="button" aria-pressed={workerSex === 'female'}
+              onClick={() => setWorkerSex('female')}>Women workers</button>
+            <button type="button" aria-pressed={workerSex === 'male'}
+              onClick={() => setWorkerSex('male')}>Men workers</button>
           </div>
         )}
         {activeLayer === 'crime' && !crimeData && !crimeError &&
@@ -578,6 +683,10 @@ function App() {
           <span className="layer-status">Loading 2011 Census sex-ratio data…</span>}
         {activeLayer === 'population' && populationMetric === 'sexRatio' && sexRatioError &&
           <span className="crime-load-error">{sexRatioError}</span>}
+        {activeLayer === 'population' && populationMetric === 'workers' && !workforceData && !workforceError &&
+          <span className="layer-status">Loading Census 2011 worker data…</span>}
+        {activeLayer === 'population' && populationMetric === 'workers' && workforceError &&
+          <span className="crime-load-error">{workforceError}</span>}
         {activeLayer === 'literacy' && !literacyData && !literacyError &&
           <span className="layer-status">Loading Census literacy data…</span>}
         {activeLayer === 'news' && newsError &&
@@ -622,6 +731,27 @@ function App() {
               <p>Crime details are not available for this district boundary.</p>
             ) : activeLayer === 'crime' ? (
               <p>Loading district crime details…</p>
+            ) : activeLayer === 'population' && populationMetric === 'workers' && selectedWorkforce ? (
+              <>
+                <div className="literacy-data-type">Official Census value · 2011</div>
+                <div className="district-crime-total">
+                  <span>{workerSex === 'female' ? 'Women workers' : 'Men workers'}</span>
+                  <strong>{formatCount(selectedWorkerCount)}</strong>
+                </div>
+                <p className="district-crime-note">{selectedWorkerRate.toFixed(1)}% of the district’s {workerSex === 'female' ? 'female' : 'male'} population was recorded as working.</p>
+                <dl className="literacy-details">
+                  <div><dt>Male workers</dt><dd>{formatCount(selectedWorkforce.workers_male)}</dd></div>
+                  <div><dt>Female workers</dt><dd>{formatCount(selectedWorkforce.workers_female)}</dd></div>
+                  <div><dt>Male main workers</dt><dd>{formatCount(selectedWorkforce.main_workers_male)}</dd></div>
+                  <div><dt>Female main workers</dt><dd>{formatCount(selectedWorkforce.main_workers_female)}</dd></div>
+                  <div><dt>Male marginal workers</dt><dd>{formatCount(selectedWorkforce.marginal_workers_male)}</dd></div>
+                  <div><dt>Female marginal workers</dt><dd>{formatCount(selectedWorkforce.marginal_workers_female)}</dd></div>
+                </dl>
+              </>
+            ) : activeLayer === 'population' && populationMetric === 'workers' && workforceByCode ? (
+              <p>No separate 2011 Census worker record is available for this boundary; no parent district’s value was copied.</p>
+            ) : activeLayer === 'population' && populationMetric === 'workers' ? (
+              <p>Loading Census 2011 worker details…</p>
             ) : activeLayer === 'population' && populationMetric === 'sexRatio' && selectedSexRatio ? (
               <>
                 <div className="literacy-data-type">Official Census value · 2011</div>
@@ -765,6 +895,42 @@ function App() {
               <p>Duplicate workbook district names left unmapped: {sexRatioByDistrict.duplicateNames.join(', ')}.</p>}
             {sexRatioByDistrict.unmatchedNames.length > 0 &&
               <p>Workbook districts without matching map boundaries: {sexRatioByDistrict.unmatchedNames.join(', ')}.</p>}
+          </div>
+        )}
+
+        {activeLayer === 'population' && populationMetric === 'workers' && workforceByCode && (
+          <div className="crime-legend" aria-label="Census 2011 worker participation map legend">
+            <strong>{workerSex === 'female' ? 'Female' : 'Male'} worker participation · Census 2011</strong>
+            <span className="crime-legend-subtitle">Workers of selected sex as a share of that sex’s total district population</span>
+            {workforceBreaks.length === workerColors.length - 1 ? (
+              <div className="crime-legend-items">
+                {workerColors.map((color, index) => {
+                  const lower = index === 0 ? null : workforceBreaks[index - 1]
+                  const upper = workforceBreaks[index]
+                  const className = index === 0 ? 'Low' : index === workerColors.length - 1 ? 'High' : 'Middle'
+                  const label = index === 0
+                    ? `${className}: ≤ ${upper.toFixed(1)}%`
+                    : index === workerColors.length - 1
+                      ? `${className}: > ${lower.toFixed(1)}%`
+                      : `${className}: ${lower.toFixed(1)}–${upper.toFixed(1)}%`
+                  return (
+                    <div className="crime-legend-item" key={color}>
+                      <span className="crime-legend-swatch" style={{ backgroundColor: color }} />
+                      <span>{label}</span>
+                    </div>
+                  )
+                })}
+                <div className="crime-legend-item">
+                  <span className="crime-legend-swatch" style={{ backgroundColor: '#cbd5e1' }} />
+                  <span>Unavailable</span>
+                </div>
+              </div>
+            ) : (
+              <p>Not enough matched Census records to build the legend.</p>
+            )}
+            <p>Source: <a href="https://censusindia.gov.in/nada/index.php/catalog/6191" target="_blank" rel="noreferrer">Census of India, Primary Census Abstract 2011</a>. Rate = workers of the selected sex ÷ total population of that sex × 100. Newer or unmatched boundaries are left unavailable.</p>
+            {workforceByCode.unavailableDistricts.length > 0 &&
+              <p>Unavailable boundaries: {workforceByCode.unavailableDistricts.join(', ')}.</p>}
           </div>
         )}
 
@@ -941,13 +1107,19 @@ function App() {
         <GeoJSON
           key={activeLayer === 'pci'
             ? 'pci-all-districts'
-            : `${selectedDistrictName}-${activeLayer}-${populationMetric}-${newsView}-${newsLanguage}-${newsPayload?.status.lastCollectionAt}`}          data={visibleDistricts}
+            : `${selectedDistrictName}-${activeLayer}-${populationMetric}-${workerSex}-${newsView}-${newsLanguage}-${newsPayload?.status.lastCollectionAt}`}          data={visibleDistricts}
           style={(feature) => {
             const isSelected = feature === selectedDistrict
             const districtName = feature.properties?.dtname
             const crimeCount = crimeData?.districts?.[districtName]?.total
             const population = populationByDistrict?.values?.[districtName]?.total
             const sexRatio = sexRatioByDistrict?.values?.[districtName]?.sex_ratio
+            const workerRecord = workforceByCode?.values?.[String(feature.properties?.dtcode11)]
+            const workerRate = workerRecord
+              ? workerSex === 'female'
+                ? workerRecord.workers_female / workerRecord.population_female * 100
+                : workerRecord.workers_male / workerRecord.population_male * 100
+              : Number.NaN
             const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
             const newsCount = newsDistrictCounts[districtName] || 0
 
@@ -974,6 +1146,15 @@ function App() {
                 color: isSelected ? '#1f2937' : '#ffffff',
                 weight: isSelected ? 3 : 1,
                 fillColor: getSexRatioColor(sexRatio),
+                fillOpacity: 0.84,
+              }
+            }
+
+            if (activeLayer === 'population' && populationMetric === 'workers') {
+              return {
+                color: isSelected ? '#1f2937' : '#ffffff',
+                weight: isSelected ? 3 : 1,
+                fillColor: getWorkerColor(workerRate, workforceBreaks, workerColors),
                 fillOpacity: 0.84,
               }
             }
@@ -1024,6 +1205,12 @@ function App() {
             const crimeCount = crimeData?.districts?.[districtName]?.total
             const population = populationByDistrict?.values?.[districtName]
             const sexRatio = sexRatioByDistrict?.values?.[districtName]?.sex_ratio
+            const workerRecord = workforceByCode?.values?.[String(feature.properties?.dtcode11)]
+            const workerRate = workerRecord
+              ? workerSex === 'female'
+                ? workerRecord.workers_female / workerRecord.population_female * 100
+                : workerRecord.workers_male / workerRecord.population_male * 100
+              : Number.NaN
             const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
             const newsCount = newsDistrictCounts[districtName] || 0
             const newsPeriod = newsView === 'today' ? 'in today’s collection' : 'in yesterday’s digest'
@@ -1032,7 +1219,11 @@ function App() {
               ? `${districtName}: ${newsCount} grouped news stories ${newsPeriod}`
               : activeLayer === 'crime' && Number.isFinite(crimeCount)
                 ? `${districtName}: ${formatCount(crimeCount)} reported crimes against women in 2024`
-                : activeLayer === 'population' && populationMetric === 'sexRatio' && Number.isFinite(sexRatio)
+                : activeLayer === 'population' && populationMetric === 'workers' && Number.isFinite(workerRate)
+                  ? `${districtName}: ${workerRate.toFixed(1)}% ${workerSex} worker participation; Census 2011`
+                  : activeLayer === 'population' && populationMetric === 'workers'
+                    ? `${districtName}: Census 2011 worker data unavailable`
+                    : activeLayer === 'population' && populationMetric === 'sexRatio' && Number.isFinite(sexRatio)
                   ? `${districtName}: ${formatCount(sexRatio)} females per 1,000 males (Census 2011)`
                   : activeLayer === 'population' && populationMetric === 'sexRatio'
                     ? `${districtName}: Census 2011 sex ratio unavailable`

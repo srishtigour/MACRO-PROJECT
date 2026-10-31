@@ -124,6 +124,17 @@ app.get('/api/sex-ratio', async (req, res) => {
   }
 })
 
+app.get('/api/workforce', async (req, res) => {
+  try {
+    const filePath = path.resolve(__dirname, 'workers-2011.json')
+    const data = await fs.readFile(filePath, 'utf8')
+    res.json(JSON.parse(data))
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Census 2011 workforce data could not be loaded' })
+  }
+})
+
 app.get('/api/literacy', async (req, res) => {
   try {
     const filePath = path.resolve(__dirname, 'literacy-data-2011.json')
