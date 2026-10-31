@@ -1,0 +1,208 @@
+{
+  "year": 2011,
+  "unit": "females per 1,000 males",
+  "source": "Census2011.co.in district pages and user-provided MP District Demographics Census 2011 50 Districts workbook",
+  "sourceFile": "MP_District_Demographics_Census_2011_50_Districts.xlsx",
+  "records": [
+    {
+      "district_name": "Indore",
+      "sex_ratio": 928
+    },
+    {
+      "district_name": "Jabalpur",
+      "sex_ratio": 929
+    },
+    {
+      "district_name": "Sagar",
+      "sex_ratio": 893
+    },
+    {
+      "district_name": "Bhopal",
+      "sex_ratio": 918
+    },
+    {
+      "district_name": "Rewa",
+      "sex_ratio": 931
+    },
+    {
+      "district_name": "Satna",
+      "sex_ratio": 926
+    },
+    {
+      "district_name": "Dhar",
+      "sex_ratio": 964
+    },
+    {
+      "district_name": "Chhindwara",
+      "sex_ratio": 964
+    },
+    {
+      "district_name": "Gwalior",
+      "sex_ratio": 864
+    },
+    {
+      "district_name": "Ujjain",
+      "sex_ratio": 955
+    },
+    {
+      "district_name": "Morena",
+      "sex_ratio": 840
+    },
+    {
+      "district_name": "West Nimar",
+      "sex_ratio": 965
+    },
+    {
+      "district_name": "Chhattarpur",
+      "sex_ratio": 883
+    },
+    {
+      "district_name": "Shivpuri",
+      "sex_ratio": 877
+    },
+    {
+      "district_name": "Bhind",
+      "sex_ratio": 837
+    },
+    {
+      "district_name": "Balaghat",
+      "sex_ratio": 1021
+    },
+    {
+      "district_name": "Betul",
+      "sex_ratio": 971
+    },
+    {
+      "district_name": "Dewas",
+      "sex_ratio": 942
+    },
+    {
+      "district_name": "Rajgarh",
+      "sex_ratio": 956
+    },
+    {
+      "district_name": "Shajapur",
+      "sex_ratio": 938
+    },
+    {
+      "district_name": "Vidisha",
+      "sex_ratio": 896
+    },
+    {
+      "district_name": "Ratlam",
+      "sex_ratio": 971
+    },
+    {
+      "district_name": "Tikamgarh",
+      "sex_ratio": 901
+    },
+    {
+      "district_name": "Barwani",
+      "sex_ratio": 982
+    },
+    {
+      "district_name": "Seoni",
+      "sex_ratio": 982
+    },
+    {
+      "district_name": "Mandsaur",
+      "sex_ratio": 963
+    },
+    {
+      "district_name": "Raisen",
+      "sex_ratio": 901
+    },
+    {
+      "district_name": "Sehore",
+      "sex_ratio": 918
+    },
+    {
+      "district_name": "East Nimar",
+      "sex_ratio": 943
+    },
+    {
+      "district_name": "Katni",
+      "sex_ratio": 952
+    },
+    {
+      "district_name": "Damoh",
+      "sex_ratio": 910
+    },
+    {
+      "district_name": "Guna",
+      "sex_ratio": 912
+    },
+    {
+      "district_name": "Hoshangabad",
+      "sex_ratio": 914
+    },
+    {
+      "district_name": "Singrauli",
+      "sex_ratio": 920
+    },
+    {
+      "district_name": "Sidhi",
+      "sex_ratio": 957
+    },
+    {
+      "district_name": "Narsimhapur",
+      "sex_ratio": 920
+    },
+    {
+      "district_name": "Shahdol",
+      "sex_ratio": 974
+    },
+    {
+      "district_name": "Mandla",
+      "sex_ratio": 1008
+    },
+    {
+      "district_name": "Jhabua",
+      "sex_ratio": 990
+    },
+    {
+      "district_name": "Panna",
+      "sex_ratio": 905
+    },
+    {
+      "district_name": "Ashoknagar",
+      "sex_ratio": 904
+    },
+    {
+      "district_name": "Neemuch",
+      "sex_ratio": 954
+    },
+    {
+      "district_name": "Datia",
+      "sex_ratio": 873
+    },
+    {
+      "district_name": "Burhanpur",
+      "sex_ratio": 951
+    },
+    {
+      "district_name": "Anuppur",
+      "sex_ratio": 976
+    },
+    {
+      "district_name": "Alirajpur",
+      "sex_ratio": 1011
+    },
+    {
+      "district_name": "Dindori",
+      "sex_ratio": 1002
+    },
+    {
+      "district_name": "Sheopur",
+      "sex_ratio": 901
+    },
+    {
+      "district_name": "Umaria",
+      "sex_ratio": 950
+    },
+    {
+      "district_name": "Harda",
+      "sex_ratio": 935
+    }
+  ]
+}
