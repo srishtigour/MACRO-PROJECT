@@ -33,6 +33,11 @@ const SEX_RATIO_SOURCE_NAMES = {
 }
 const NEWS_COLORS = { none: '#e5e7eb', low: '#bfdbfe', medium: '#60a5fa', high: '#1d4ed8' }
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+const PCI_COLORS = ['#fff7bc', '#fec44f', '#fe9929', '#ec7014', '#990000']
+const PCI_NAME_ALIASES = {
+  narmadapuram: 'hoshangabad',
+  narsinghpur: 'narsimhapur',
+}
 
 const LITERACY_CLASSES = [
   { label: '0–49.99%', minimum: 0, color: '#ffffcc' },
@@ -93,6 +98,51 @@ function formatCount(value) {
   return new Intl.NumberFormat('en-IN').format(value)
 }
 
+function formatRupees(value) {
+  return `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(value)}`
+}
+
+function normalizeDistrictName(name) {
+  const normalized = String(name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  return PCI_NAME_ALIASES[normalized] || normalized
+}
+
+function getPciColor(value, breaks) {
+  if (!Number.isFinite(value) || breaks.length !== PCI_COLORS.length - 1) {
+    return '#cbd5e1'
+  }
+
+  const colorIndex = breaks.findIndex((limit) => value <= limit)
+  return PCI_COLORS[colorIndex === -1 ? PCI_COLORS.length - 1 : colorIndex]
+}
+
+function createPciPopupContent(mapDistrictName, record) {
+  const content = document.createElement('div')
+  const title = document.createElement('strong')
+  title.textContent = `District: ${mapDistrictName}`
+  content.append(title)
+
+  if (record.districtName.toLowerCase() !== mapDistrictName.trim().toLowerCase()) {
+    const csvName = document.createElement('div')
+    csvName.textContent = `CSV district name: ${record.districtName}`
+    content.append(csvName)
+  }
+
+  const income = document.createElement('div')
+  income.textContent = `Average Per Capita Income: ${formatRupees(record.amount)}`
+  content.append(income)
+
+  const estimateType = document.createElement('div')
+  estimateType.textContent = `Estimate Type: ${record.estimateType || 'Not specified'}`
+  content.append(estimateType)
+  if (record.isProxy) {
+    const proxyNote = document.createElement('div')
+    proxyNote.textContent = 'This is a parent-district proxy estimate.'
+    content.append(proxyNote)
+  }
+  return content
+}
+
 function FitMapToDistricts({ data }) {
   const map = useMap()
 
@@ -114,6 +164,7 @@ function App() {
   const [populationData, setPopulationData] = useState(null)
   const [sexRatioData, setSexRatioData] = useState(null)
   const [literacyData, setLiteracyData] = useState(null)
+  const [pciData, setPciData] = useState(null)
   const [selectedDistrict, setSelectedDistrict] = useState(null)
   const [activeLayer, setActiveLayer] = useState('districts')
   const [populationMetric, setPopulationMetric] = useState('total')
@@ -126,7 +177,7 @@ function App() {
   const [newsError, setNewsError] = useState('')
   const [newsView, setNewsView] = useState('today')
   const [newsLanguage, setNewsLanguage] = useState('all')
-
+  const [pciError, setPciError] = useState('')
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/districts`)
       .then((response) => {
@@ -199,6 +250,21 @@ function App() {
         setLiteracyData(data)
       })
       .catch((err) => setLiteracyError(err.message))
+
+    fetch(`${API_BASE_URL}/api/pci`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Could not load the PCI dataset (HTTP ${response.status})`)
+        }
+        return response.json()
+      })
+      .then((data) => {
+        if (!Array.isArray(data?.records)) {
+          throw new Error('PCI data does not contain a valid record list')
+        }
+        setPciData(data)
+      })
+      .catch((err) => setPciError(err.message))
   }, [])
 
   useEffect(() => {
@@ -227,10 +293,10 @@ function App() {
   }, [])
   const visibleDistricts = useMemo(() => {
     if (!districts) return null
-    return selectedDistrict
+    return selectedDistrict && activeLayer !== 'pci'
       ? { ...districts, features: [selectedDistrict] }
       : districts
-  }, [districts, selectedDistrict])
+  }, [districts, selectedDistrict, activeLayer])
 
   const crimeBreaks = useMemo(() => {
     if (!crimeData) return []
@@ -405,11 +471,61 @@ function App() {
     if (boundaryName) counts[boundaryName] = (counts[boundaryName] || 0) + 1
     return counts
   }, {}), [languageNewsEvents])
+
+  const pciByDistrict = useMemo(() => {
+    if (!districts || !pciData) return null
+    const recordCounts = new Map()
+    pciData.records.forEach((record) => {
+      const key = normalizeDistrictName(record.District)
+      recordCounts.set(key, (recordCounts.get(key) || 0) + 1)
+    })
+    const duplicateNames = new Set([...recordCounts].filter(([, count]) => count > 1).map(([name]) => name))
+    const recordsByName = new Map()
+    pciData.records.forEach((record) => {
+      const key = normalizeDistrictName(record.District)
+      const amount = Number(record.Average_PCI_Rupees)
+      if (!duplicateNames.has(key) && record.Average_PCI_Rupees?.trim() && Number.isFinite(amount) && amount >= 0) {
+        recordsByName.set(key, { ...record, amount })
+      }
+    })
+    const usedNames = new Set()
+    const values = {}
+    const unmatchedBoundaryNames = []
+    districts.features.forEach((feature) => {
+      const districtName = feature.properties?.dtname || ''
+      const key = normalizeDistrictName(districtName)
+      const record = duplicateNames.has(key) ? null : recordsByName.get(key)
+      if (!record) {
+        unmatchedBoundaryNames.push(districtName)
+        return
+      }
+      values[key] = {
+        districtName: record.District.trim(),
+        amount: record.amount,
+        estimateType: record.Estimate_Type,
+        isProxy: /^proxy\b/i.test(record.Estimate_Type?.trim() || ''),
+      }
+      usedNames.add(record.District)
+    })
+    return {
+      values,
+      duplicateNames: [...duplicateNames],
+      unmatchedRecords: pciData.records.filter((record) => !usedNames.has(record.District)).map((record) => record.District),
+      unmatchedBoundaryNames,
+    }
+  }, [districts, pciData])
+
+  const pciBreaks = useMemo(() => {
+    if (!pciByDistrict) return []
+    return getQuantileBreaks(Object.values(pciByDistrict.values).map((district) => district.amount), PCI_COLORS.length)
+  }, [pciByDistrict])
+
   const selectedDistrictName = selectedDistrict?.properties?.dtname || 'Selected district'
   const selectedCrime = crimeData?.districts?.[selectedDistrictName]
   const selectedPopulation = populationByDistrict?.values?.[selectedDistrictName]
   const selectedSexRatio = sexRatioByDistrict?.values?.[selectedDistrictName]
   const selectedLiteracy = literacyByCode?.values?.[String(selectedDistrict?.properties?.dtcode11)]
+  const selectedPci = pciByDistrict?.values?.[normalizeDistrictName(selectedDistrictName)]
   const selectedCrimeTypes = selectedCrime?.crimeTypes
     ? selectedCrime.crimeTypes
         .filter((crimeType) => crimeType.count > 0)
@@ -438,6 +554,8 @@ function App() {
           <button type="button" aria-pressed={activeLayer === 'news'} onClick={() => setActiveLayer('news')}>News · Live</button>
           <button type="button" aria-pressed={activeLayer === 'literacy'}
             onClick={() => setActiveLayer('literacy')}>Literacy 2011</button>
+          <button type="button" aria-pressed={activeLayer === 'pci'}
+            onClick={() => setActiveLayer('pci')}>Per Capita Income (PCI)</button>
         </div>
         {activeLayer === 'population' && (
           <div className="population-metric-selector" role="group" aria-label="Population data type">
@@ -466,6 +584,10 @@ function App() {
           <span className="crime-load-error">{newsError}</span>}
         {activeLayer === 'literacy' && literacyError &&
           <span className="crime-load-error">{literacyError}</span>}
+        {activeLayer === 'pci' && !pciData && !pciError &&
+          <span className="layer-status">Loading per capita income data…</span>}
+        {activeLayer === 'pci' && pciError &&
+          <span className="crime-load-error">{pciError}</span>}
 
         {selectedDistrict && (
           <section className="district-details" aria-label="Selected district details">
@@ -545,8 +667,23 @@ function App() {
               <p>No separate 2011 Census/tehsil records are available for this district. The value is unavailable; no parent district’s rate was copied.</p>
             ) : activeLayer === 'literacy' ? (
               <p>Loading Census literacy data…</p>
+            ) : activeLayer === 'pci' && selectedPci ? (
+              <>
+                <div className={`pci-data-type ${selectedPci.isProxy ? 'is-proxy' : ''}`}>
+                  {selectedPci.isProxy ? 'Parent-district proxy estimate' : 'Historical average'}
+                </div>
+                <div className="district-crime-total">
+                  <span>Average Per Capita Income</span>
+                  <strong>{formatRupees(selectedPci.amount)}</strong>
+                </div>
+                <p className="district-crime-note">Estimate Type: {selectedPci.estimateType}</p>
+              </>
+            ) : activeLayer === 'pci' && pciByDistrict ? (
+              <p>No matching PCI record is available for this district boundary.</p>
+            ) : activeLayer === 'pci' ? (
+              <p>Loading per capita income data…</p>
             ) : (
-              <p>Select Crime or Population to view district data.</p>
+              <p>Select a data layer to view district details.</p>
             )}
           </section>
         )}
@@ -746,6 +883,41 @@ function App() {
             )}
           </section>
         )}
+
+{activeLayer === 'pci' && pciByDistrict && (
+          <div className="crime-legend pci-legend" aria-label="Per Capita Income legend">
+            <strong>Per Capita Income (₹)</strong>
+            <span className="crime-legend-subtitle">Five quantile classes · amounts in rupees per person</span>
+            <div className="crime-legend-items">
+              {PCI_COLORS.map((color, index) => {
+                const lower = index === 0 ? null : pciBreaks[index - 1]
+                const upper = pciBreaks[index]
+                const label = index === 0
+                  ? `≤ ${formatRupees(upper)}`
+                  : index === PCI_COLORS.length - 1
+                    ? `> ${formatRupees(lower)}`
+                    : `${formatRupees(lower + 1)}–${formatRupees(upper)}`
+                return (
+                  <div className="crime-legend-item" key={color}>
+                    <span className="crime-legend-swatch" style={{ backgroundColor: color }} />
+                    <span>{label}</span>
+                  </div>
+                )
+              })}
+              <div className="crime-legend-item">
+                <span className="crime-legend-swatch" style={{ backgroundColor: '#cbd5e1' }} />
+                <span>Unavailable</span>
+              </div>
+            </div>
+            <p>Proxy estimates are explicitly labelled in each district popup and detail panel.</p>
+            <p>Showing {Object.keys(pciByDistrict.values).length} matched GeoJSON districts from {pciData.records.length} CSV rows.</p>
+            {pciByDistrict.unmatchedRecords.length > 0 &&
+              <p>CSV rows without separate boundary features: {pciByDistrict.unmatchedRecords.join(', ')}.</p>}
+            {pciByDistrict.unmatchedBoundaryNames.length > 0 &&
+              <p>Boundaries without a PCI value: {pciByDistrict.unmatchedBoundaryNames.join(', ')}.</p>}
+            {pciByDistrict.duplicateNames.length > 0 &&
+              <p>Ambiguous duplicate district records left unmapped: {pciByDistrict.duplicateNames.join(', ')}.</p>}
+          </div>        )}
       </aside>
 
       {selectedDistrict && (
@@ -767,8 +939,9 @@ function App() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <GeoJSON
-          key={`${selectedDistrictName}-${activeLayer}-${populationMetric}-${newsView}-${newsLanguage}-${newsPayload?.status.lastCollectionAt}`}
-          data={visibleDistricts}
+          key={activeLayer === 'pci'
+            ? 'pci-all-districts'
+            : `${selectedDistrictName}-${activeLayer}-${populationMetric}-${newsView}-${newsLanguage}-${newsPayload?.status.lastCollectionAt}`}          data={visibleDistricts}
           style={(feature) => {
             const isSelected = feature === selectedDistrict
             const districtName = feature.properties?.dtname
@@ -786,7 +959,7 @@ function App() {
                 fillOpacity: 0.82,
               }
             }
-
+            const pci = pciByDistrict?.values?.[normalizeDistrictName(districtName)]
             if (activeLayer === 'crime') {
               return {
                 color: isSelected ? '#1f2937' : '#ffffff',
@@ -823,6 +996,15 @@ function App() {
               }
             }
 
+            if (activeLayer === 'pci') {
+              return {
+                color: isSelected ? '#1f2937' : '#ffffff',
+                weight: isSelected ? 3 : 1,
+                fillColor: getPciColor(pci?.amount, pciBreaks),
+                fillOpacity: 0.84,
+              }
+            }
+
             return isSelected
               ? {
                   color: '#b45309',
@@ -845,6 +1027,7 @@ function App() {
             const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
             const newsCount = newsDistrictCounts[districtName] || 0
             const newsPeriod = newsView === 'today' ? 'in today’s collection' : 'in yesterday’s digest'
+            const pci = pciByDistrict?.values?.[normalizeDistrictName(districtName)]
             const tooltip = activeLayer === 'news'
               ? `${districtName}: ${newsCount} grouped news stories ${newsPeriod}`
               : activeLayer === 'crime' && Number.isFinite(crimeCount)
@@ -861,10 +1044,21 @@ function App() {
                           ? `${districtName} (2011 Census: ${literacy.district_name.trim()}): ${literacy.literacy_rate.toFixed(2)}% literacy; ${formatCount(literacy.literate_population)} literate people; total population ${formatCount(literacy.total_population)}; official Census value`
                           : activeLayer === 'literacy'
                             ? `${districtName}: literacy rate unavailable; no 2011 tehsil rows were provided for a derived value`
-                            : districtName
+                            : activeLayer === 'pci' && pci
+                              ? `${districtName}: ${formatRupees(pci.amount)} average per capita income; ${pci.estimateType}`
+                              : activeLayer === 'pci'
+                                ? `${districtName}: PCI value unavailable`
+                                : districtName
             layer.bindTooltip(tooltip, { sticky: true })
-            if (!selectedDistrict) {
-              layer.on({ click: () => selectDistrict(feature) })
+            if (!selectedDistrict || activeLayer === 'pci') {
+              layer.on({
+                click: () => {
+                  selectDistrict(feature)
+                  if (activeLayer === 'pci' && pci) {
+                    layer.bindPopup(createPciPopupContent(districtName, pci)).openPopup()
+                  }
+                },
+              })
             }
           }}
         />

@@ -144,6 +144,21 @@ app.get('/api/news', async (req, res) => {
   }
 })
 
+app.get('/api/pci', async (req, res) => {
+  try {
+    const filePath = path.resolve(
+      __dirname,
+      '../data/raw/MP_55_District_Average_PCI_with_Estimates.csv'
+    )
+    const csv = await fs.readFile(filePath, 'utf8')
+    const records = parseCsv(csv)
+    res.json({ records })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Per capita income data could not be loaded' })
+  }
+})
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`Backend listening on port ${port}`)
   newsService.startNewsScheduler()
