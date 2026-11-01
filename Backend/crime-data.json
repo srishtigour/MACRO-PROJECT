@@ -1,6 +1,18 @@
 {
   "year": 2024,
   "metric": "Total reported crimes against women (IPC/BNS + SLL)",
+  "courtOutcomes": {
+    "year": 2021,
+    "geography": "Madhya Pradesh (state-wide)",
+    "registered": 30673,
+    "chargesheeted": 26092,
+    "convicted": 4057,
+    "acquitted": 6336,
+    "pendingTrialAtYearEnd": 115771,
+    "source": "Rajya Sabha Starred Question No. 254, 18 December 2024; NCRB Crime in India",
+    "sourceUrl": "https://rsdebate.nic.in/bitstream/123456789/752850/1/PQ_266_18122024_S254_p50_p57.pdf",
+    "note": "Court decisions and pending trials in 2021 may involve cases registered in earlier years. These are not district-level outcomes and are not a case-by-case follow-up of the 2024 map data."
+  },
   "boundaryFeatureCount": 52,
   "reportedStateTotal": 32832,
   "mappedTotal": 32718,

@@ -63,6 +63,26 @@
 .population-metric-selector button[aria-pressed="true"] { border-color:#1769aa; background:#eaf3fa; color:#124d7a; }
 .population-metric-selector button:focus-visible { outline:3px solid #f59e0b; outline-offset:2px; }
 
+.comparison-panel { border-top: 1px solid #d1d5db; padding-top: 10px; color: #1f2937; }
+.comparison-panel h3 { margin: 0; font-size: 14px; }
+.comparison-help, .comparison-footnote { margin: 5px 0 8px; color: #6b7280; font-size: 10px; line-height: 1.4; }
+.comparison-rule { display: grid; gap: 5px; margin: 8px 0; }
+.comparison-rule select { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 5px; padding: 7px 6px; background: #fff; color: #374151; font: 11px/1.3 system-ui,sans-serif; }
+.comparison-add, .comparison-download, .comparison-remove { border: 1px solid #1769aa; border-radius: 5px; padding: 6px 8px; background: #eaf3fa; color: #124d7a; cursor: pointer; font: 600 11px/1.3 system-ui,sans-serif; }
+.comparison-add { width: 100%; }
+.comparison-add:disabled { cursor: wait; opacity: .55; }
+.comparison-remove { justify-self: end; border-color: #d1d5db; background: #fff; color: #4b5563; }
+.comparison-results { border-top: 1px solid #e5e7eb; margin-top: 10px; padding-top: 9px; }
+.comparison-results > strong { display: block; color: #1f2937; font-size: 12px; }
+.comparison-results > p { margin: 6px 0; color: #6b7280; font-size: 10px; }
+.comparison-table-wrap { max-height: 210px; overflow: auto; margin: 8px 0; border: 1px solid #e5e7eb; border-radius: 5px; }
+.comparison-table-wrap table { border-collapse: collapse; width: 100%; font-size: 10px; }
+.comparison-table-wrap th, .comparison-table-wrap td { border-bottom: 1px solid #e5e7eb; padding: 5px; text-align: left; vertical-align: top; }
+.comparison-table-wrap thead th { position: sticky; top: 0; background: #f3f4f6; }
+.comparison-table-wrap tbody th { white-space: nowrap; }
+.comparison-table-wrap td { font-variant-numeric: tabular-nums; }
+.comparison-download { width: 100%; margin-bottom: 4px; }
+
 .district-details {
   border-top: 1px solid #d1d5db;
   padding-top: 10px;
@@ -214,6 +234,21 @@
   line-height: 1.4;
 }
 .crime-legend a { color:#1769aa; }
+
+.crime-outcomes {
+  border-top: 1px solid #d1d5db;
+  padding-top: 10px;
+  color: #1f2937;
+  font: 12px/1.4 system-ui, sans-serif;
+}
+.crime-outcomes h3 { margin: 0; font-size: 14px; }
+.crime-outcomes-scope { display: block; margin-top: 2px; color: #4b5563; font-size: 11px; }
+.crime-outcomes dl { display: grid; gap: 5px; margin: 9px 0; }
+.crime-outcomes dl div { display: flex; justify-content: space-between; gap: 8px; }
+.crime-outcomes dt { color: #4b5563; }
+.crime-outcomes dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.crime-outcomes p { margin: 8px 0; color: #6b7280; font-size: 10px; }
+.crime-outcomes a { color: #1769aa; font-size: 10px; overflow-wrap: anywhere; }
 
 @media (max-width: 600px) {
   .layer-panel { top:90px; left:10px; width:min(250px, calc(100vw - 20px)); max-height:calc(100vh - 20px); }

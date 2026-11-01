@@ -1,0 +1,269 @@
+{
+  "survey": "NFHS-6",
+  "survey_year": "2023-24",
+  "indicators": {
+    "female_school_attendance_age_6_plus_percent": "Female population age 6 years and above who ever attended school (%)",
+    "women_10_plus_years_schooling_percent": "Women with 10 or more years of schooling (%)"
+  },
+  "source": "NFHS-6 district fact sheets, International Institute for Population Sciences (IIPS) / Ministry of Health and Family Welfare",
+  "source_url": "https://www.nfhsiips.in/nfhsuser/release-details.php",
+  "compiled_dataset_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpS9PZF9aVMVEGX0A9LdN1jsggbw0Kae-9gsrdwG7wqRp0Tr_MVrwfzOcGJx5TPYogFkLysZnPKs6E/pub?gid=836994213&single=true&output=csv",
+  "methodology_note": "District percentages are survey estimates. Female school attendance means female population age 6+ who have ever attended school; it is not the same as literacy. Women with 10+ years schooling is a separate education-attainment indicator. NFHS geography has 51 Madhya Pradesh districts; Niwari has no separate matching estimate.",
+  "records": [
+    {
+      "district_name": "Guna",
+      "female_school_attendance_age_6_plus_percent": 60.1,
+      "women_10_plus_years_schooling_percent": 18.9
+    },
+    {
+      "district_name": "Mandla",
+      "female_school_attendance_age_6_plus_percent": 69.8,
+      "women_10_plus_years_schooling_percent": 33.0
+    },
+    {
+      "district_name": "Vidisha",
+      "female_school_attendance_age_6_plus_percent": 69.2,
+      "women_10_plus_years_schooling_percent": 29.4
+    },
+    {
+      "district_name": "Gwalior",
+      "female_school_attendance_age_6_plus_percent": 73.6,
+      "women_10_plus_years_schooling_percent": 40.1
+    },
+    {
+      "district_name": "Seoni",
+      "female_school_attendance_age_6_plus_percent": 74.1,
+      "women_10_plus_years_schooling_percent": 40.2
+    },
+    {
+      "district_name": "Ujjain",
+      "female_school_attendance_age_6_plus_percent": 67.2,
+      "women_10_plus_years_schooling_percent": 32.0
+    },
+    {
+      "district_name": "Satna",
+      "female_school_attendance_age_6_plus_percent": 71.3,
+      "women_10_plus_years_schooling_percent": 32.7
+    },
+    {
+      "district_name": "Ratlam",
+      "female_school_attendance_age_6_plus_percent": 67.4,
+      "women_10_plus_years_schooling_percent": 31.1
+    },
+    {
+      "district_name": "Shivpuri",
+      "female_school_attendance_age_6_plus_percent": 58.9,
+      "women_10_plus_years_schooling_percent": 22.8
+    },
+    {
+      "district_name": "Jabalpur",
+      "female_school_attendance_age_6_plus_percent": 83.5,
+      "women_10_plus_years_schooling_percent": 46.8
+    },
+    {
+      "district_name": "Indore",
+      "female_school_attendance_age_6_plus_percent": 83.4,
+      "women_10_plus_years_schooling_percent": 52.4
+    },
+    {
+      "district_name": "Burhanpur",
+      "female_school_attendance_age_6_plus_percent": 70.6,
+      "women_10_plus_years_schooling_percent": 26.4
+    },
+    {
+      "district_name": "Rewa",
+      "female_school_attendance_age_6_plus_percent": 69.6,
+      "women_10_plus_years_schooling_percent": 33.5
+    },
+    {
+      "district_name": "Singrauli",
+      "female_school_attendance_age_6_plus_percent": 65.5,
+      "women_10_plus_years_schooling_percent": 24.7
+    },
+    {
+      "district_name": "Tikamgarh",
+      "female_school_attendance_age_6_plus_percent": 66.7,
+      "women_10_plus_years_schooling_percent": 28.0
+    },
+    {
+      "district_name": "Hoshangabad",
+      "female_school_attendance_age_6_plus_percent": 74.9,
+      "women_10_plus_years_schooling_percent": 40.1
+    },
+    {
+      "district_name": "Khandwa (East Nimar)",
+      "female_school_attendance_age_6_plus_percent": 69.2,
+      "women_10_plus_years_schooling_percent": 27.3
+    },
+    {
+      "district_name": "Sidhi",
+      "female_school_attendance_age_6_plus_percent": 66.0,
+      "women_10_plus_years_schooling_percent": 29.7
+    },
+    {
+      "district_name": "Neemuch",
+      "female_school_attendance_age_6_plus_percent": 68.1,
+      "women_10_plus_years_schooling_percent": 34.5
+    },
+    {
+      "district_name": "Panna",
+      "female_school_attendance_age_6_plus_percent": 65.8,
+      "women_10_plus_years_schooling_percent": 32.5
+    },
+    {
+      "district_name": "Narsimhapur",
+      "female_school_attendance_age_6_plus_percent": 77.2,
+      "women_10_plus_years_schooling_percent": 34.7
+    },
+    {
+      "district_name": "Barwani",
+      "female_school_attendance_age_6_plus_percent": 55.7,
+      "women_10_plus_years_schooling_percent": 23.0
+    },
+    {
+      "district_name": "Dewas",
+      "female_school_attendance_age_6_plus_percent": 67.4,
+      "women_10_plus_years_schooling_percent": 31.9
+    },
+    {
+      "district_name": "Datia",
+      "female_school_attendance_age_6_plus_percent": 65.6,
+      "women_10_plus_years_schooling_percent": 29.1
+    },
+    {
+      "district_name": "Bhind",
+      "female_school_attendance_age_6_plus_percent": 66.7,
+      "women_10_plus_years_schooling_percent": 32.1
+    },
+    {
+      "district_name": "Khargone (West Nimar)",
+      "female_school_attendance_age_6_plus_percent": 65.8,
+      "women_10_plus_years_schooling_percent": 26.5
+    },
+    {
+      "district_name": "Jhabua",
+      "female_school_attendance_age_6_plus_percent": 47.4,
+      "women_10_plus_years_schooling_percent": 15.3
+    },
+    {
+      "district_name": "Damoh",
+      "female_school_attendance_age_6_plus_percent": 74.9,
+      "women_10_plus_years_schooling_percent": 33.6
+    },
+    {
+      "district_name": "Dhar",
+      "female_school_attendance_age_6_plus_percent": 63.5,
+      "women_10_plus_years_schooling_percent": 29.7
+    },
+    {
+      "district_name": "Balaghat",
+      "female_school_attendance_age_6_plus_percent": 77.6,
+      "women_10_plus_years_schooling_percent": 39.6
+    },
+    {
+      "district_name": "Sheopur",
+      "female_school_attendance_age_6_plus_percent": 56.6,
+      "women_10_plus_years_schooling_percent": 19.4
+    },
+    {
+      "district_name": "Raisen",
+      "female_school_attendance_age_6_plus_percent": 74.0,
+      "women_10_plus_years_schooling_percent": 31.4
+    },
+    {
+      "district_name": "Dindori",
+      "female_school_attendance_age_6_plus_percent": 66.4,
+      "women_10_plus_years_schooling_percent": 30.4
+    },
+    {
+      "district_name": "Katni",
+      "female_school_attendance_age_6_plus_percent": 77.0,
+      "women_10_plus_years_schooling_percent": 41.3
+    },
+    {
+      "district_name": "Rajgarh",
+      "female_school_attendance_age_6_plus_percent": 63.7,
+      "women_10_plus_years_schooling_percent": 29.7
+    },
+    {
+      "district_name": "Alirajpur",
+      "female_school_attendance_age_6_plus_percent": 41.6,
+      "women_10_plus_years_schooling_percent": 17.6
+    },
+    {
+      "district_name": "Sehore",
+      "female_school_attendance_age_6_plus_percent": 68.7,
+      "women_10_plus_years_schooling_percent": 34.2
+    },
+    {
+      "district_name": "Bhopal",
+      "female_school_attendance_age_6_plus_percent": 83.6,
+      "women_10_plus_years_schooling_percent": 50.7
+    },
+    {
+      "district_name": "Umaria",
+      "female_school_attendance_age_6_plus_percent": 69.8,
+      "women_10_plus_years_schooling_percent": 31.8
+    },
+    {
+      "district_name": "Mandsaur",
+      "female_school_attendance_age_6_plus_percent": 67.5,
+      "women_10_plus_years_schooling_percent": 30.1
+    },
+    {
+      "district_name": "Chhatarpur",
+      "female_school_attendance_age_6_plus_percent": 66.6,
+      "women_10_plus_years_schooling_percent": 27.8
+    },
+    {
+      "district_name": "Anuppur",
+      "female_school_attendance_age_6_plus_percent": 68.6,
+      "women_10_plus_years_schooling_percent": 38.2
+    },
+    {
+      "district_name": "Chhindwara",
+      "female_school_attendance_age_6_plus_percent": 74.8,
+      "women_10_plus_years_schooling_percent": 40.4
+    },
+    {
+      "district_name": "Shajapur",
+      "female_school_attendance_age_6_plus_percent": 67.3,
+      "women_10_plus_years_schooling_percent": 35.7
+    },
+    {
+      "district_name": "Shahdol",
+      "female_school_attendance_age_6_plus_percent": 67.7,
+      "women_10_plus_years_schooling_percent": 34.5
+    },
+    {
+      "district_name": "Betul",
+      "female_school_attendance_age_6_plus_percent": 75.3,
+      "women_10_plus_years_schooling_percent": 42.9
+    },
+    {
+      "district_name": "Harda",
+      "female_school_attendance_age_6_plus_percent": 71.8,
+      "women_10_plus_years_schooling_percent": 30.8
+    },
+    {
+      "district_name": "Morena",
+      "female_school_attendance_age_6_plus_percent": 68.3,
+      "women_10_plus_years_schooling_percent": 29.5
+    },
+    {
+      "district_name": "Ashoknagar",
+      "female_school_attendance_age_6_plus_percent": 62.9,
+      "women_10_plus_years_schooling_percent": 20.3
+    },
+    {
+      "district_name": "Sagar",
+      "female_school_attendance_age_6_plus_percent": 77.2,
+      "women_10_plus_years_schooling_percent": 33.9
+    },
+    {
+      "district_name": "Agar Malwa",
+      "female_school_attendance_age_6_plus_percent": 62.5,
+      "women_10_plus_years_schooling_percent": 25.8
+    }
+  ]
+}

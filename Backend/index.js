@@ -146,6 +146,17 @@ app.get('/api/literacy', async (req, res) => {
   }
 })
 
+app.get('/api/female-education', async (req, res) => {
+  try {
+    const filePath = path.resolve(__dirname, 'female-education-nfhs6.json')
+    const data = await fs.readFile(filePath, 'utf8')
+    res.json(JSON.parse(data))
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'NFHS-6 female education data could not be loaded' })
+  }
+})
+
 app.get('/api/news', async (req, res) => {
   try {
     res.json(await newsService.getNewsPayload())

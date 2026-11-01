@@ -118,6 +118,16 @@ function normalizeDistrictName(name) {
   return PCI_NAME_ALIASES[normalized] || normalized
 }
 
+const NFHS_DISTRICT_ALIASES = {
+  khandwaeastnimar: 'khandwa',
+  khargonewestnimar: 'khargone',
+}
+
+function normalizeNfhsDistrictName(name) {
+  const normalized = String(name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  return NFHS_DISTRICT_ALIASES[normalized] || normalized
+}
+
 function getPciColor(value, breaks) {
   if (!Number.isFinite(value) || breaks.length !== PCI_COLORS.length - 1) {
     return '#cbd5e1'
@@ -176,17 +186,23 @@ function App() {
   const [sexRatioData, setSexRatioData] = useState(null)
   const [workforceData, setWorkforceData] = useState(null)
   const [literacyData, setLiteracyData] = useState(null)
+  const [femaleEducationData, setFemaleEducationData] = useState(null)
   const [pciData, setPciData] = useState(null)
   const [selectedDistrict, setSelectedDistrict] = useState(null)
   const [activeLayer, setActiveLayer] = useState('districts')
+  const [comparisonRules, setComparisonRules] = useState([
+    { id: 'rule-1', metricId: 'crime.total', level: 'high' },
+  ])
   const [populationMetric, setPopulationMetric] = useState('total')
   const [workerSex, setWorkerSex] = useState('female')
+  const [literacyMetric, setLiteracyMetric] = useState('census')
   const [error, setError] = useState('')
   const [crimeError, setCrimeError] = useState('')
   const [populationError, setPopulationError] = useState('')
   const [sexRatioError, setSexRatioError] = useState('')
   const [workforceError, setWorkforceError] = useState('')
   const [literacyError, setLiteracyError] = useState('')
+  const [femaleEducationError, setFemaleEducationError] = useState('')
   const [newsPayload, setNewsPayload] = useState(null)
   const [newsError, setNewsError] = useState('')
   const [newsView, setNewsView] = useState('today')
@@ -277,6 +293,19 @@ function App() {
         setLiteracyData(data)
       })
       .catch((err) => setLiteracyError(err.message))
+
+    fetch(`${API_BASE_URL}/api/female-education`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Could not load NFHS-6 female education data (HTTP ${response.status})`)
+        return response.json()
+      })
+      .then((data) => {
+        if (data?.survey !== 'NFHS-6' || !Array.isArray(data?.records)) {
+          throw new Error('NFHS-6 data does not contain a valid district record list')
+        }
+        setFemaleEducationData(data)
+      })
+      .catch((err) => setFemaleEducationError(err.message))
 
     fetch(`${API_BASE_URL}/api/pci`)
       .then((response) => {
@@ -545,6 +574,29 @@ function App() {
     }
   }, [districts, literacyData])
 
+  const femaleEducationByDistrict = useMemo(() => {
+    if (!districts || !femaleEducationData) return null
+
+    const recordsByName = new Map(femaleEducationData.records.map((record) => [
+      normalizeNfhsDistrictName(record.district_name),
+      record,
+    ]))
+    const values = {}
+    districts.features.forEach((feature) => {
+      const districtName = feature.properties?.dtname
+      const record = recordsByName.get(normalizeNfhsDistrictName(districtName))
+      if (!record) return
+      values[districtName] = record
+    })
+
+    return {
+      values,
+      unmatchedBoundaryNames: districts.features
+        .map((feature) => feature.properties?.dtname)
+        .filter((name) => name && !values[name]),
+    }
+  }, [districts, femaleEducationData])
+
   const newsEvents = newsView === 'today'
     ? newsPayload?.today?.events || []
     : newsPayload?.publishedDigest?.events || []
@@ -604,6 +656,143 @@ function App() {
     return getQuantileBreaks(Object.values(pciByDistrict.values).map((district) => district.amount), PCI_COLORS.length)
   }, [pciByDistrict])
 
+  const comparisonOptions = useMemo(() => {
+    if (!districts) return []
+    const names = districts.features.map((feature) => feature.properties?.dtname).filter(Boolean)
+    const options = []
+    const makeOption = (id, label, valueForDistrict) => ({
+      id,
+      label,
+      values: Object.fromEntries(names
+        .map((name) => [name, valueForDistrict(name)])
+        .filter(([, value]) => Number.isFinite(value))),
+    })
+
+    if (crimeData?.districts) {
+      options.push(makeOption('crime.total', `Overall crimes against women · ${crimeData.year}`, (name) => crimeData.districts[name]?.total))
+      const crimeTypes = [...new Set(Object.values(crimeData.districts)
+        .flatMap((district) => (district.crimeTypes || []).map((item) => item.name)))].sort()
+      crimeTypes.forEach((crimeType, index) => {
+        options.push(makeOption(`crime.type.${index}`, `${crimeType} · ${crimeData.year}`, (name) =>
+          crimeData.districts[name]?.crimeTypes?.find((item) => item.name === crimeType)?.count))
+      })
+    }
+
+    if (populationByDistrict) {
+      options.push(makeOption('population.total', 'Total population · 2026 estimate', (name) => populationByDistrict.values[name]?.total))
+    }
+    if (sexRatioByDistrict) {
+      options.push(makeOption('population.sexRatio', 'Sex ratio · Census 2011 (females per 1,000 males)', (name) => sexRatioByDistrict.values[name]?.sex_ratio))
+    }
+    if (workforceByCode && districts) {
+      const workforceValue = (name) => workforceByCode.values[String(
+        districts.features.find((feature) => feature.properties?.dtname === name)?.properties?.dtcode11,
+      )]
+      const workforceFields = [...new Set((workforceData?.records || [])
+        .flatMap((record) => Object.keys(record)))]
+        .filter((field) => /_(male|female)$/.test(field))
+        .sort((first, second) => first.localeCompare(second))
+      workforceFields.forEach((field) => {
+        const sex = field.endsWith('_female') ? 'Women' : 'Men'
+        const measure = field.replace(/_(male|female)$/, '').replaceAll('_', ' ')
+        const id = `workers.breakdown.${field}`
+        options.push(makeOption(id, `${sex} ${measure} · Census 2011 (people)`, (name) => workforceValue(name)?.[field]))
+      })
+      options.push(makeOption('workers.women.rate', 'Women worker participation · Census 2011 (%)', (name) => {
+        const record = workforceValue(name)
+        return record ? record.workers_female / record.population_female * 100 : Number.NaN
+      }))
+      options.push(makeOption('workers.men.rate', 'Men worker participation · Census 2011 (%)', (name) => {
+        const record = workforceValue(name)
+        return record ? record.workers_male / record.population_male * 100 : Number.NaN
+      }))
+    }
+    if (literacyByCode && districts) {
+      options.push(makeOption('literacy.rate', 'Literacy rate · Census 2011 (%)', (name) => {
+        const code = districts.features.find((feature) => feature.properties?.dtname === name)?.properties?.dtcode11
+        return literacyByCode.values[String(code)]?.literacy_rate
+      }))
+    }
+    if (femaleEducationByDistrict) {
+      options.push(makeOption('literacy.femaleAttendance.rate', 'Female school attendance · NFHS-6 (2023–24, %)', (name) =>
+        femaleEducationByDistrict.values[name]?.female_school_attendance_age_6_plus_percent))
+      options.push(makeOption('literacy.women10Years.rate', 'Women with 10+ years schooling · NFHS-6 (2023–24, %)', (name) =>
+        femaleEducationByDistrict.values[name]?.women_10_plus_years_schooling_percent))
+    }
+    if (pciByDistrict) {
+      options.push(makeOption('income.pci', 'Per capita income · supplied dataset (₹)', (name) => pciByDistrict.values[normalizeDistrictName(name)]?.amount))
+    }
+    return options.filter((option) => Object.keys(option.values).length > 0)
+  }, [districts, crimeData, populationByDistrict, sexRatioByDistrict, workforceByCode, workforceData, literacyByCode, femaleEducationByDistrict, pciByDistrict])
+
+  const comparisonRuleOptions = useMemo(() => comparisonRules.map((rule) => ({
+    ...rule,
+    option: comparisonOptions.find((option) => option.id === rule.metricId) || comparisonOptions[0],
+  })), [comparisonRules, comparisonOptions])
+  const comparisonResults = useMemo(() => {
+    if (comparisonRuleOptions.some((rule) => !rule.option)) return { matches: [], available: false }
+    const classify = (option) => {
+      const values = Object.values(option.values)
+      const cuts = getQuantileBreaks(values, 3)
+      return { cuts, values }
+    }
+    const classifications = comparisonRuleOptions.map((rule) => ({ ...rule, ...classify(rule.option) }))
+    const matches = districts.features.map((feature) => {
+      const name = feature.properties?.dtname
+      const values = classifications.map((rule) => rule.option.values[name])
+      if (values.some((value) => !Number.isFinite(value))) return null
+      const matchesAll = classifications.every((rule, index) => {
+        const value = values[index]
+        const [lowCut, highCut] = rule.cuts
+        if (rule.level === 'low') return value <= lowCut
+        if (rule.level === 'medium') return value > lowCut && value <= highCut
+        return value > highCut
+      })
+      return matchesAll ? { name, values } : null
+    }).filter(Boolean)
+    return { matches, available: true }
+  }, [districts, comparisonRuleOptions])
+
+  const updateComparisonRule = (id, changes) => {
+    setComparisonRules((rules) => rules.map((rule) => rule.id === id ? { ...rule, ...changes } : rule))
+  }
+
+  const downloadComparisonCsv = () => {
+    const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
+    const formatThreshold = (value, metricId) => {
+      if (metricId === 'income.pci') return formatRupees(value)
+      const formatted = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 }).format(value)
+      return metricId.endsWith('.rate') || metricId === 'literacy.rate' ? `${formatted}%` : formatted
+    }
+    const reportRows = [
+      ['Report', 'Madhya Pradesh district comparison'],
+      ['Generated at (India time)', new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date())],
+      ['Match logic', 'All conditions must match (AND)'],
+      ['Matching districts', comparisonResults.matches.length],
+    ]
+    comparisonRuleOptions.forEach((rule, index) => {
+      const cuts = getQuantileBreaks(Object.values(rule.option.values), 3)
+      const threshold = rule.level === 'low'
+        ? `≤ ${formatThreshold(cuts[0], rule.option.id)}`
+        : rule.level === 'medium'
+          ? `> ${formatThreshold(cuts[0], rule.option.id)} and ≤ ${formatThreshold(cuts[1], rule.option.id)}`
+          : `> ${formatThreshold(cuts[1], rule.option.id)}`
+      const levelLabel = rule.level === 'high' ? 'High (top third)' : rule.level === 'medium' ? 'Medium (middle third)' : 'Low (bottom third)'
+      reportRows.push([`Condition ${index + 1}`, rule.option.label, levelLabel, `Cutoff: ${threshold}`])
+    })
+    reportRows.push(['Note', 'Districts without data for every selected condition are excluded. High/medium/low use relative thirds across districts with available data.'])
+    reportRows.push([])
+    reportRows.push(['District', ...comparisonRuleOptions.map((rule) => rule.option?.label || 'Selected metric')])
+    comparisonResults.matches.forEach((match) => reportRows.push([match.name, ...match.values]))
+    const csv = `\uFEFF${reportRows.map((row) => row.map(csvCell).join(',')).join('\r\n')}`
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'mp-district-comparison-report.csv'
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   const selectedDistrictName = selectedDistrict?.properties?.dtname || 'Selected district'
   const selectedCrime = crimeData?.districts?.[selectedDistrictName]
   const selectedPopulation = populationByDistrict?.values?.[selectedDistrictName]
@@ -619,6 +808,7 @@ function App() {
       : selectedWorkforce.workers_male / selectedWorkforce.population_male * 100
     : null
   const selectedLiteracy = literacyByCode?.values?.[String(selectedDistrict?.properties?.dtcode11)]
+  const selectedFemaleEducation = femaleEducationByDistrict?.values?.[selectedDistrictName]
   const selectedPci = pciByDistrict?.values?.[normalizeDistrictName(selectedDistrictName)]
   const selectedCrimeTypes = selectedCrime?.crimeTypes
     ? selectedCrime.crimeTypes
@@ -643,14 +833,83 @@ function App() {
             onClick={() => setActiveLayer('districts')}>Districts</button>
           <button type="button" aria-pressed={activeLayer === 'crime'}
             onClick={() => setActiveLayer('crime')}>Crime</button>
+          <button type="button" aria-pressed={activeLayer === 'compare'}
+            onClick={() => { setSelectedDistrict(null); setActiveLayer('compare') }}>Compare</button>
           <button type="button" aria-pressed={activeLayer === 'population'}
             onClick={() => setActiveLayer('population')}>Population</button>
           <button type="button" aria-pressed={activeLayer === 'news'} onClick={() => setActiveLayer('news')}>News · Live</button>
           <button type="button" aria-pressed={activeLayer === 'literacy'}
-            onClick={() => setActiveLayer('literacy')}>Literacy 2011</button>
+            onClick={() => setActiveLayer('literacy')}>Literacy</button>
           <button type="button" aria-pressed={activeLayer === 'pci'}
             onClick={() => setActiveLayer('pci')}>Per Capita Income (PCI)</button>
         </div>
+        {activeLayer === 'compare' && (
+          <section className="comparison-panel" aria-label="District data comparison">
+            <h3>Build a district comparison</h3>
+            <p className="comparison-help">Choose a measure and whether it should be low, medium, or high. Conditions are combined with AND.</p>
+            {comparisonRuleOptions.map((rule) => (
+              <div className="comparison-rule" key={rule.id}>
+                <select
+                  aria-label="Comparison data"
+                  value={rule.option?.id || ''}
+                  onChange={(event) => updateComparisonRule(rule.id, { metricId: event.target.value })}
+                >
+                  {comparisonOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                </select>
+                <select
+                  aria-label="Comparison level"
+                  value={rule.level}
+                  onChange={(event) => updateComparisonRule(rule.id, { level: event.target.value })}
+                >
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+                {comparisonRules.length > 1 && (
+                  <button type="button" className="comparison-remove" aria-label="Remove condition"
+                    onClick={() => setComparisonRules((rules) => rules.filter((item) => item.id !== rule.id))}>Remove</button>
+                )}
+              </div>
+            ))}
+            <button type="button" className="comparison-add"
+              disabled={!comparisonOptions.length}
+              onClick={() => setComparisonRules((rules) => [...rules, {
+                id: `rule-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                metricId: comparisonOptions[0]?.id || '',
+                level: 'high',
+              }])}>+ Add condition</button>
+            <div className="comparison-results" aria-live="polite">
+              <strong>{comparisonResults.available ? `${comparisonResults.matches.length} matching district${comparisonResults.matches.length === 1 ? '' : 's'}` : 'Loading district data…'}</strong>
+              {comparisonResults.available && comparisonResults.matches.length > 0 ? (
+                <div className="comparison-table-wrap">
+                  <table>
+                    <thead><tr><th>District</th>{comparisonRuleOptions.map((rule) => <th key={rule.id}>{rule.option?.label}</th>)}</tr></thead>
+                    <tbody>{comparisonResults.matches.map((match) => (
+                      <tr key={match.name}>
+                        <th scope="row">{match.name}</th>
+                        {match.values.map((value, index) => {
+                          const metricId = comparisonRuleOptions[index].option.id
+                          const formatted = metricId.endsWith('.rate') || metricId === 'literacy.rate'
+                            ? `${value.toFixed(1)}%`
+                            : metricId === 'income.pci'
+                              ? formatRupees(value)
+                              : formatCount(Math.round(value))
+                          return <td key={comparisonRuleOptions[index].id}>{formatted}</td>
+                        })}
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ) : comparisonResults.available ? (
+                <p>No district matches all these conditions. Try changing a level or removing a condition.</p>
+              ) : null}
+              {comparisonResults.available && (
+                <button type="button" className="comparison-download" onClick={downloadComparisonCsv}>Generate comparison report · CSV</button>
+              )}
+              <p className="comparison-footnote">High, medium, and low are relative thirds among districts with data. Missing values are excluded. Dataset years differ and are shown in each option label.</p>
+            </div>
+          </section>
+        )}
         {activeLayer === 'population' && (
           <div className="population-metric-selector" role="group" aria-label="Population data type">
             <span>Population breakdown</span>
@@ -660,6 +919,17 @@ function App() {
               onClick={() => setPopulationMetric('sexRatio')}>Sex ratio · Census 2011</button>
             <button type="button" aria-pressed={populationMetric === 'workers'}
               onClick={() => setPopulationMetric('workers')}>Workers by sex · Census 2011</button>
+          </div>
+        )}
+        {activeLayer === 'literacy' && (
+          <div className="population-metric-selector" role="group" aria-label="Choose literacy and education measure">
+            <span>Literacy &amp; female education</span>
+            <button type="button" aria-pressed={literacyMetric === 'census'}
+              onClick={() => setLiteracyMetric('census')}>Literacy rate · Census 2011</button>
+            <button type="button" aria-pressed={literacyMetric === 'femaleAttendance'}
+              onClick={() => setLiteracyMetric('femaleAttendance')}>Female school attendance · NFHS-6</button>
+            <button type="button" aria-pressed={literacyMetric === 'women10Years'}
+              onClick={() => setLiteracyMetric('women10Years')}>Women with 10+ years schooling · NFHS-6</button>
           </div>
         )}
         {activeLayer === 'population' && populationMetric === 'workers' && (
@@ -688,11 +958,15 @@ function App() {
         {activeLayer === 'population' && populationMetric === 'workers' && workforceError &&
           <span className="crime-load-error">{workforceError}</span>}
         {activeLayer === 'literacy' && !literacyData && !literacyError &&
-          <span className="layer-status">Loading Census literacy data…</span>}
+          literacyMetric === 'census' && <span className="layer-status">Loading Census literacy data…</span>}
+        {activeLayer === 'literacy' && literacyMetric !== 'census' && !femaleEducationData && !femaleEducationError &&
+          <span className="layer-status">Loading NFHS-6 female education data…</span>}
         {activeLayer === 'news' && newsError &&
           <span className="crime-load-error">{newsError}</span>}
         {activeLayer === 'literacy' && literacyError &&
-          <span className="crime-load-error">{literacyError}</span>}
+          literacyMetric === 'census' && <span className="crime-load-error">{literacyError}</span>}
+        {activeLayer === 'literacy' && literacyMetric !== 'census' && femaleEducationError &&
+          <span className="crime-load-error">{femaleEducationError}</span>}
         {activeLayer === 'pci' && !pciData && !pciError &&
           <span className="layer-status">Loading per capita income data…</span>}
         {activeLayer === 'pci' && pciError &&
@@ -778,7 +1052,24 @@ function App() {
               <p>Population estimate unavailable for this boundary; no other district’s value was assigned.</p>
             ) : activeLayer === 'population' && populationMetric === 'total' ? (
               <p>Loading district population estimate…</p>
-            ) : activeLayer === 'literacy' && selectedLiteracy ? (
+            ) : activeLayer === 'literacy' && literacyMetric !== 'census' && selectedFemaleEducation ? (
+              <>
+                <div className="literacy-data-type">NFHS-6 survey estimate · 2023–24</div>
+                <div className="district-crime-total">
+                  <span>{literacyMetric === 'femaleAttendance' ? 'Female population age 6+ ever attended school' : 'Women with 10+ years of schooling'}</span>
+                  <strong>{(literacyMetric === 'femaleAttendance'
+                    ? selectedFemaleEducation.female_school_attendance_age_6_plus_percent
+                    : selectedFemaleEducation.women_10_plus_years_schooling_percent).toFixed(1)}%</strong>
+                </div>
+                <p className="district-crime-note">
+                  {literacyMetric === 'femaleAttendance'
+                    ? 'Share of female population aged 6 and above who have ever attended school. This is not the same as a literacy rate.'
+                    : 'Share of women with 10 or more years of schooling.'}
+                </p>
+              </>
+            ) : activeLayer === 'literacy' && literacyMetric !== 'census' && femaleEducationByDistrict ? (
+              <p>No separate NFHS-6 estimate is available for this boundary; no neighbouring or parent district value was copied.</p>
+            ) : activeLayer === 'literacy' && literacyMetric === 'census' && selectedLiteracy ? (
               <>
                 <div className="literacy-data-type">Official Census value · 2011</div>
                 <div className="district-crime-total">
@@ -793,10 +1084,10 @@ function App() {
                 </dl>
                 <p className="district-crime-note">Rate uses literate population divided by population aged 7+.</p>
               </>
-            ) : activeLayer === 'literacy' && literacyByCode ? (
+            ) : activeLayer === 'literacy' && literacyMetric === 'census' && literacyByCode ? (
               <p>No separate 2011 Census/tehsil records are available for this district. The value is unavailable; no parent district’s rate was copied.</p>
             ) : activeLayer === 'literacy' ? (
-              <p>Loading Census literacy data…</p>
+              <p>{literacyMetric === 'census' ? 'Loading Census literacy data…' : 'Loading NFHS-6 female education data…'}</p>
             ) : activeLayer === 'pci' && selectedPci ? (
               <>
                 <div className={`pci-data-type ${selectedPci.isProxy ? 'is-proxy' : ''}`}>
@@ -833,6 +1124,24 @@ function App() {
             <p>Pandhurna, Maihar, and Mauganj are grouped with their former district areas.
               Railway and cyber-unit reports ({formatCount(crimeData.excludedTotal)}) are not shown because they do not map to one district boundary.</p>
           </div>
+        )}
+
+        {activeLayer === 'crime' && crimeData?.courtOutcomes && (
+          <section className="crime-outcomes" aria-label="State-wide crime against women court outcomes">
+            <h3>Court outcomes · {crimeData.courtOutcomes.year}</h3>
+            <span className="crime-outcomes-scope">{crimeData.courtOutcomes.geography}</span>
+            <dl>
+              <div><dt>Cases registered</dt><dd>{formatCount(crimeData.courtOutcomes.registered)}</dd></div>
+              <div><dt>Cases chargesheeted</dt><dd>{formatCount(crimeData.courtOutcomes.chargesheeted)}</dd></div>
+              <div><dt>Cases convicted</dt><dd>{formatCount(crimeData.courtOutcomes.convicted)}</dd></div>
+              <div><dt>Cases acquitted</dt><dd>{formatCount(crimeData.courtOutcomes.acquitted)}</dd></div>
+              <div><dt>Pending trial at year end</dt><dd>{formatCount(crimeData.courtOutcomes.pendingTrialAtYearEnd)}</dd></div>
+            </dl>
+            <p>{crimeData.courtOutcomes.note}</p>
+            <a href={crimeData.courtOutcomes.sourceUrl} target="_blank" rel="noreferrer">
+              Source: {crimeData.courtOutcomes.source}
+            </a>
+          </section>
         )}
 
         {activeLayer === 'population' && populationMetric === 'total' && populationByDistrict && (
@@ -954,10 +1263,14 @@ function App() {
             <p>Today’s map updates as feeds are checked. Stories without a clearly matched district stay in the news list.</p>
           </div>
         )}
-        {activeLayer === 'literacy' && literacyByCode && (
-          <div className="crime-legend literacy-legend" aria-label="Census 2011 literacy rate legend">
-            <strong>Literacy Rate (Census 2011)</strong>
-            <span className="crime-legend-subtitle">Official district-level Census values</span>
+        {activeLayer === 'literacy' && ((literacyMetric === 'census' && literacyByCode) || (literacyMetric !== 'census' && femaleEducationByDistrict)) && (
+          <div className="crime-legend literacy-legend" aria-label="Literacy and female education map legend">
+            <strong>{literacyMetric === 'census'
+              ? 'Literacy Rate (Census 2011)'
+              : literacyMetric === 'femaleAttendance'
+                ? 'Female School Attendance (NFHS-6)'
+                : 'Women with 10+ Years Schooling (NFHS-6)'}</strong>
+            <span className="crime-legend-subtitle">{literacyMetric === 'census' ? 'Official district-level Census values' : 'District survey estimates · 2023–24'}</span>
             <div className="crime-legend-items">
               {LITERACY_CLASSES.map((item) => (
                 <div className="crime-legend-item" key={item.label}>
@@ -970,11 +1283,17 @@ function App() {
                 <span>Unavailable</span>
               </div>
             </div>
-            <p>Source: Census of India, Primary Census Abstract 2011. Rate = literate population ÷ population aged 7+ × 100. The workbook contains no tehsil rows, so Agar Malwa and Niwari are unavailable; no rates were estimated.</p>
-            {literacyByCode.duplicateCodes.length > 0 &&
+            {literacyMetric === 'census' ? (
+              <p>Source: Census of India, Primary Census Abstract 2011. Rate = literate population ÷ population aged 7+ × 100. The workbook contains no tehsil rows, so Agar Malwa and Niwari are unavailable; no rates were estimated.</p>
+            ) : (
+              <p>Source: <a href="https://www.nfhsiips.in/nfhsuser/release-details.php" target="_blank" rel="noreferrer">NFHS-6 district fact sheets (IIPS / MoHFW)</a>. Attendance is for female population aged 6+ who ever attended school; 10+ years schooling is a separate indicator. Niwari is unavailable because NFHS-6 reports the older 51-district geography.</p>
+            )}
+            {literacyMetric === 'census' && literacyByCode.duplicateCodes.length > 0 &&
               <p>Duplicate Census codes left unmapped: {literacyByCode.duplicateCodes.join(', ')}.</p>}
-            {literacyByCode.unmatchedCodes.length > 0 &&
+            {literacyMetric === 'census' && literacyByCode.unmatchedCodes.length > 0 &&
               <p>Census district codes without a matching map feature: {literacyByCode.unmatchedCodes.join(', ')}.</p>}
+            {literacyMetric !== 'census' && femaleEducationByDistrict?.unmatchedBoundaryNames.length > 0 &&
+              <p>Boundary areas without a matching NFHS-6 district estimate: {femaleEducationByDistrict.unmatchedBoundaryNames.join(', ')}.</p>}
           </div>
         )}
         {activeLayer === 'news' && (
@@ -1107,7 +1426,7 @@ function App() {
         <GeoJSON
           key={activeLayer === 'pci'
             ? 'pci-all-districts'
-            : `${selectedDistrictName}-${activeLayer}-${populationMetric}-${workerSex}-${newsView}-${newsLanguage}-${newsPayload?.status.lastCollectionAt}`}          data={visibleDistricts}
+            : `${selectedDistrictName}-${activeLayer}-${populationMetric}-${workerSex}-${literacyMetric}-${newsView}-${newsLanguage}-${newsPayload?.status.lastCollectionAt}-${comparisonRules.map((rule) => `${rule.metricId}:${rule.level}`).join('|')}-${comparisonResults.matches.map((match) => match.name).join(',')}`}          data={visibleDistricts}
           style={(feature) => {
             const isSelected = feature === selectedDistrict
             const districtName = feature.properties?.dtname
@@ -1121,7 +1440,18 @@ function App() {
                 : workerRecord.workers_male / workerRecord.population_male * 100
               : Number.NaN
             const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
+            const femaleEducation = femaleEducationByDistrict?.values?.[districtName]
             const newsCount = newsDistrictCounts[districtName] || 0
+
+            if (activeLayer === 'compare') {
+              const isMatch = comparisonResults.matches.some((match) => match.name === districtName)
+              return {
+                color: isMatch ? '#7e57a5' : '#9ca3af',
+                weight: isMatch ? 2.5 : 1,
+                fillColor: isMatch ? '#e8d9f2' : '#cbd5e1',
+                fillOpacity: isMatch ? 0.88 : 0.28,
+              }
+            }
 
             if (activeLayer === 'news') {
               return {
@@ -1169,10 +1499,15 @@ function App() {
             }
 
             if (activeLayer === 'literacy') {
+              const value = literacyMetric === 'census'
+                ? literacy?.literacy_rate
+                : literacyMetric === 'femaleAttendance'
+                  ? femaleEducation?.female_school_attendance_age_6_plus_percent
+                  : femaleEducation?.women_10_plus_years_schooling_percent
               return {
                 color: isSelected ? '#1f2937' : '#ffffff',
                 weight: isSelected ? 3 : 1,
-                fillColor: getLiteracyColor(literacy?.literacy_rate),
+                fillColor: getLiteracyColor(value),
                 fillOpacity: 0.84,
               }
             }
@@ -1212,10 +1547,14 @@ function App() {
                 : workerRecord.workers_male / workerRecord.population_male * 100
               : Number.NaN
             const literacy = literacyByCode?.values?.[String(feature.properties?.dtcode11)]
+            const femaleEducation = femaleEducationByDistrict?.values?.[districtName]
             const newsCount = newsDistrictCounts[districtName] || 0
             const newsPeriod = newsView === 'today' ? 'in today’s collection' : 'in yesterday’s digest'
             const pci = pciByDistrict?.values?.[normalizeDistrictName(districtName)]
-            const tooltip = activeLayer === 'news'
+            const comparisonMatch = comparisonResults.matches.some((match) => match.name === districtName)
+            const tooltip = activeLayer === 'compare'
+              ? `${districtName}: ${comparisonMatch ? 'matches all selected conditions' : 'does not match all selected conditions'}`
+              : activeLayer === 'news'
               ? `${districtName}: ${newsCount} grouped news stories ${newsPeriod}`
               : activeLayer === 'crime' && Number.isFinite(crimeCount)
                 ? `${districtName}: ${formatCount(crimeCount)} reported crimes against women in 2024`
@@ -1231,17 +1570,23 @@ function App() {
                       ? `${districtName}: ${formatCount(population.total)} estimated population in 2026`
                       : activeLayer === 'population'
                         ? `${districtName}: population estimate unavailable`
-                        : activeLayer === 'literacy' && literacy
+                   : activeLayer === 'literacy' && literacyMetric === 'census' && literacy
                           ? `${districtName} (2011 Census: ${literacy.district_name.trim()}): ${literacy.literacy_rate.toFixed(2)}% literacy; ${formatCount(literacy.literate_population)} literate people; total population ${formatCount(literacy.total_population)}; official Census value`
-                          : activeLayer === 'literacy'
+                          : activeLayer === 'literacy' && literacyMetric !== 'census' && femaleEducation
+                            ? literacyMetric === 'femaleAttendance'
+                              ? `${districtName}: ${femaleEducation.female_school_attendance_age_6_plus_percent.toFixed(1)}% of female population aged 6+ ever attended school (NFHS-6, 2023–24)`
+                              : `${districtName}: ${femaleEducation.women_10_plus_years_schooling_percent.toFixed(1)}% of women have 10+ years of schooling (NFHS-6, 2023–24)`
+                            : activeLayer === 'literacy' && literacyMetric === 'census'
                             ? `${districtName}: literacy rate unavailable; no 2011 tehsil rows were provided for a derived value`
+                            : activeLayer === 'literacy'
+                              ? `${districtName}: NFHS-6 female education data unavailable for this boundary`
                             : activeLayer === 'pci' && pci
                               ? `${districtName}: ${formatRupees(pci.amount)} average per capita income; ${pci.estimateType}`
                               : activeLayer === 'pci'
                                 ? `${districtName}: PCI value unavailable`
                                 : districtName
             layer.bindTooltip(tooltip, { sticky: true })
-            if (!selectedDistrict || activeLayer === 'pci') {
+            if (activeLayer !== 'compare' && (!selectedDistrict || activeLayer === 'pci')) {
               layer.on({
                 click: () => {
                   selectDistrict(feature)
