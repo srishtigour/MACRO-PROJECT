@@ -279,7 +279,7 @@ function App() {
       })
       .catch((err) => setWorkforceError(err.message))
 
-    fetch('http://localhost:5000/api/literacy')
+    fetch(`${API_BASE_URL}/api/literacy`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Could not load the 2011 Census literacy data (HTTP ${response.status})`)
